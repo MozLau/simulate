@@ -1,0 +1,43 @@
+{
+    "botName" : "formation bot",
+    "randSeed" : 0,
+
+    "formation": "distribute_SuEA_algorithm",
+    "timeStep" : 0.05,
+    "simulationTime" : 0,
+    "showCommsRadius" : 0,
+    "showComms" : 0,
+    "distributePercent" : 0.9,
+    "displayWidth"  : 1200,
+    "displayHeight" : 700,
+    "showHist" : 1,
+
+    "storeHistory": 1,
+    "imageName" : "./movie/f%04d.bmp",
+    "saveVideo" :  0,
+    "saveVideoN" : 200000,
+    "finalImage" : null,
+    "stateFileName" : "simstates.json",  
+    "_":"standard diviation",
+    "stateFileSteps" : 0,
+    "colorscheme" : "bright",
+    "GUI"  : 1,
+    "msgSuccessRate" : 1,
+    "distanceNoise" : 0,
+    "turnRate": 26,    
+
+    "histLength": 500,
+    "omni": 1,
+    "randDefects": 0,
+    "drawLattice": 1,
+    "flipY": 1,
+    "latticeSize": 51.0,
+    "halfSpace": 1,
+    "commsRadius" : 120,
+
+    "stepsPerFrame" : 100,    
+    "stopTick": 100,    
+    "displayScale"  : 0.7,    
+    "nBots" : 29
+}
+
