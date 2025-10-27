@@ -15,8 +15,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-
-
+#if 0
 // Function to read two groups of hex points from a file
 void read_boundary_from_file(const char *filename,struct Hex **group0, int *group0_size, struct Hex **group1, int *group1_size, struct Hex **group2, int *group2_size, int **recycleFlagSeq) {
     FILE *file = fopen(filename, "r");
@@ -115,6 +114,111 @@ void read_boundary_from_file(const char *filename,struct Hex **group0, int *grou
 
     fclose(file);
 }
+#else
+// Function to read two groups of hex points from a file
+void read_boundary_from_file(const char *filename,
+                             struct Hex **group0, int *group0_size,
+                             struct Hex **group1, int *group1_size,
+                             struct Hex **group2, int *group2_size,
+                             int **recycleFlagSeq) {
+    FILE *file = fopen(filename, "r");
+    if (file == NULL) {
+        perror("Failed to open file");
+        exit(EXIT_FAILURE);
+    }
+
+    char buffer[256];
+
+    // Count lines in the first group
+    int shape_count = 0;
+    while (fgets(buffer, sizeof(buffer), file)) {
+        if (strcmp(buffer, "\r\n") == 0 || strcmp(buffer, "\n") == 0) break; // Stop at empty line
+        shape_count++;
+    }
+
+    // Count lines in the second group
+    int first_count = 0;
+    while (fgets(buffer, sizeof(buffer), file)) {
+        if (strcmp(buffer, "\r\n") == 0 || strcmp(buffer, "\n") == 0) break; // Stop at empty line
+        first_count++;
+    }
+
+    // Count lines in the third group
+    int second_count = 0;
+    while (fgets(buffer, sizeof(buffer), file)) {
+        if (strcmp(buffer, "\r\n") == 0 || strcmp(buffer, "\n") == 0) break; // Stop at empty line
+        second_count++;
+    }
+
+    // Allocate memory for the first group
+    *group0 = malloc(shape_count * sizeof(struct Hex));
+    if (*group0 == NULL) {
+        perror("Failed to allocate memory for group0");
+        fclose(file);
+        exit(EXIT_FAILURE);
+    }
+    *group0_size = shape_count;
+
+    // Allocate memory for the s[] (source positions)
+    *group1 = malloc((first_count + second_count) * sizeof(struct Hex));
+    if (*group1 == NULL) {
+        perror("Failed to allocate memory for group1");
+        fclose(file);
+        exit(EXIT_FAILURE);
+    }
+    *group1_size = (first_count + second_count);
+
+    // Allocate memory for the t[] (target positions) and recycleFlagSeq
+    *group2 = malloc((first_count + second_count) * sizeof(struct Hex));
+    *recycleFlagSeq = malloc((first_count + second_count) * sizeof(int));
+    if (*group2 == NULL) {
+        perror("Failed to allocate memory for group2");
+        fclose(file);
+        free(*group1);
+        exit(EXIT_FAILURE);
+    }
+    *group2_size = (first_count + second_count);
+
+    // Rewind and read the first group (lattice_shape)
+    rewind(file);
+    for (int i = 0; i < shape_count; i++) {
+        fscanf(file, "%d %d", &((*group0)[i].q), &((*group0)[i].r));
+    }
+
+    // Skip the empty line after first group
+    fgets(buffer, sizeof(buffer), file);
+    fgets(buffer, sizeof(buffer), file);
+
+    // Read the second group (s_q s_r t_q t_r), flag set to 0
+    for (int i = 0; i < first_count; i++) {
+        fscanf(file, "%d %d %d %d",
+               &((*group1)[i].q), &((*group1)[i].r),
+               &((*group2)[i].q), &((*group2)[i].r));
+        (*recycleFlagSeq)[i] = 0;
+    }
+
+    // Skip the empty line after second group
+    fgets(buffer, sizeof(buffer), file);
+    fgets(buffer, sizeof(buffer), file);
+
+    // Read the third group (s_q s_r t_q t_r flag)
+    for (int i = first_count; i < first_count + second_count; i++) {
+        fscanf(file, "%d %d %d %d %d",
+               &((*group1)[i].q), &((*group1)[i].r),
+               &((*group2)[i].q), &((*group2)[i].r),
+               &((*recycleFlagSeq)[i]));
+    }
+
+    // Read and discard number of bots (or use later if needed)
+    fgets(buffer, sizeof(buffer), file);
+    fscanf(file, "%*d\n");
+
+    // Read and discard shape offset
+    fscanf(file, "%*d %*d\n");
+
+    fclose(file);
+}
+#endif 
 
 void read_path_from_file(const char *filename, struct Hex **path, int **path_length, int* total_number_of_path) {
     FILE *file = fopen(filename, "r");

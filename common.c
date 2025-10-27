@@ -1064,9 +1064,6 @@ int omni_move_to_lattice(struct Hex *point) {
             target_speed(distance*0.5f,0); //slow down when approaching
         }else{
             target_speed(0,0);
-            struct Hex point_in_Hex = my_nearest_lattice();
-            mydata->hex_q = point_in_Hex.q;
-            mydata->hex_r = point_in_Hex.r;
             return 1;
         }
     

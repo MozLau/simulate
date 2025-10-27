@@ -681,11 +681,8 @@ void initiate_simple_relocation(void) {
         printf("正在遍历机器人 位置（%d，%d）\n",  pos.q, pos.r);
         
         // 如果这个位置被占用且不是机器人0
-#if 0
-        if (is_occupied[pos.q + 100][pos.r + 100] && !(pos.q == -3 && pos.r == 1)) {
-#else
         if (is_occupied[pos.q + 100][pos.r + 100]) { 
-#endif   
+
             // 检查这个机器人是否能移动
             if (can_robot_move(pos)) {
                 if (!was_recently_relocated(pos)){
@@ -782,61 +779,6 @@ struct Hex cart_to_hex(struct Cartesian cart) {
 }
 
 // 向形状移动状态
-#if 0
-void moveToShapeState() {
-    static int move_attempts = 0;
-    static struct Hex current_target;
-    move_attempts++;
-    
-    //printf("Robot %d: === MOVE_TO_SHAPE (attempt %d) ===\n", kilo_uid, move_attempts);
-    
-    if (move_attempts == 1) {
-        current_target.q = mydata->target_q;
-        current_target.r = mydata->target_r;
-    }
-    struct Hex current_hex = cart_to_hex((struct Cartesian){kilo_x,kilo_y});
-    
-    //printf("Robot %d: 从当前的 (%d,%d)(%.1f,%.1f) 移动到 (%d,%d)\n", kilo_uid, current_hex.q, current_hex.r,kilo_x, kilo_y, mydata->target_q, mydata->target_r);
-
-    int result = omni_move_to_lattice(&current_target);
-    if(result){
-        if (current_target.q != mydata->target_q || current_target.r != mydata->target_r) {
-            current_target.q = mydata->target_q;
-            current_target.r = mydata->target_r;
-
-            printf("Robot %d: 到达中间点，继续向最终目标移动\n", kilo_uid);
-        }else{
-            /*
-            struct Hex final_alogrithm_hex = my_nearest_lattice();
-
-            printf("Robot %d: FINAL POSITION: (%d,%d)\n", kilo_uid, final_alogrithm_hex.q, final_alogrithm_hex.r);
-            
-            if (final_alogrithm_hex.q == target_hex.q && final_alogrithm_hex.r == target_hex.r && final_alogrithm_hex.q == current_hex.q && final_alogrithm_hex.r == current_hex.r) {
-                printf("最终确定 %d: ✅到达\n", kilo_uid);
-            } else {
-                printf("Robot %d: ❌ FAILED - Wrong final position!\n", kilo_uid);
-            }
-            */
-            global_relocation_request = (struct Hex){99,99};
-            update_occupancy(mydata->target_shape_index, 1);
-            mydata->shape_position_occupied = 1;
-            shape_entry_in_progress = 0;
-            occupied++;
-
-            confirm_global_vacancy();
-            set_bot_state(IDLE);
-        }
-    }
-
-    // 更新坐标
-    struct Hex cur_hex = cart_to_hex((struct Cartesian){kilo_x, kilo_y});
-    mydata->hex_q = cur_hex.q;
-    mydata->hex_r = cur_hex.r;
-
-
-}
-
-#else
 void moveToShapeState() {
     static int move_attempts = 0;
     static struct Hex current_target = {0, 0};
@@ -881,6 +823,9 @@ void moveToShapeState() {
         if (current_target.q != mydata->target_q || current_target.r != mydata->target_r) {
             current_target.q = mydata->target_q;
             current_target.r = mydata->target_r;
+            struct Hex cur_hex = cart_to_hex((struct Cartesian){kilo_x, kilo_y});
+            mydata->hex_q = cur_hex.q;
+            mydata->hex_r = cur_hex.r;
             printf("Robot %d: 到达中间点，继续向最终目标移动\n", kilo_uid);
         }else{
             /*
@@ -898,9 +843,9 @@ void moveToShapeState() {
             && mydata->original_position.r >= -100 && mydata->original_position.r<= 100){
                 is_occupied[mydata->original_position.q + 100][mydata->original_position.r + 100] = 0;
             }
-            struct Hex update_hex = my_nearest_lattice();
-            mydata->hex_q = update_hex.q;
-            mydata->hex_r = update_hex.r;
+            struct Hex cur_hex = cart_to_hex((struct Cartesian){kilo_x, kilo_y});
+            mydata->hex_q = cur_hex.q;
+            mydata->hex_r = cur_hex.r;
             mydata->original_position.q = mydata->hex_q;
             mydata->original_position.r = mydata->hex_r;
             printf("Robot %d: 已经到达位置 (%d.%d), 下一步补位\n",kilo_uid,mydata->hex_q,mydata->hex_r);
@@ -916,13 +861,12 @@ void moveToShapeState() {
         }
     }
 }
-#endif 
+
 /* ----------功能：补位-----------*/
 
 // 检查链式补位机会，实际上形状内的也需要补位。
 void checkChainRelocationOpportunity(void) {
     //if (!mydata->formation_initialized) return;
-
     // 只有形状外的机器人才参与链式补位
     if (mydata->shape_position_occupied) 
     {
@@ -968,40 +912,26 @@ void checkChainRelocationOpportunity(void) {
     {
         return;
     }
-    
-    //printf("Robot %d: 🔍 Checking chain relocation at (%d,%d) [OUTSIDE SHAPE]...\n", \
-           kilo_uid, mydata->hex_q, mydata->hex_r);
-    
-    // 寻找可以移动到的位置（邻近形状或邻近其他即将移动的机器人）
-#if 0
-    struct Hex target_pos = find_chain_relocation_target();
-    
-    if (target_pos.q != 99 && target_pos.r != 99) {
-        printf("Robot %d: 🚀 Found chain relocation target (%d,%d)\n", 
-               kilo_uid, target_pos.q, target_pos.r);
-        initiate_chain_relocation_to_position(target_pos);
-    }
-#else
+
     struct Hex my_hex = {mydata->hex_q, mydata->hex_r};
 
     if(is_collision_imminent(global_vacancy)){
         return;
     }
 
-
     // 不相邻就不补位
     if (!is_hex_adjacent(my_hex, global_vacancy)) {   
         return; // 不相邻，不参与补位
     }
-        
+     /* 
     // 与形状距离为1 不补位
-#if 1
     struct Hex target = find_nearest_unoccupied_target();
     if (is_hex_adjacent(my_hex, target)) {
         printf("该点与形状距离为1不补位\n");
         return; // 相邻，不参与补位
     }
-#endif
+    */
+
 
 /*
 #if 0
@@ -1022,7 +952,7 @@ void checkChainRelocationOpportunity(void) {
     last_relocation_from.r = mydata->hex_r;
     last_relocation_to.q = global_vacancy.q;
     last_relocation_to.r = global_vacancy.r;
-    printf("补位机器人 %d： （%d,%d）全局空位（%d，%d）\n", kilo_uid, mydata->hex_q,mydata->hex_r,global_vacancy.q,global_vacancy.r);
+    printf("在 检查补位中，补位机器人 %d： （%d,%d）全局空位（%d，%d）\n", kilo_uid, mydata->hex_q,mydata->hex_r,global_vacancy.q,global_vacancy.r);
     mydata->original_position.q = mydata->hex_q;
     mydata->original_position.r = mydata->hex_r;
 
@@ -1031,9 +961,7 @@ void checkChainRelocationOpportunity(void) {
 
     set_bot_state(CHAIN_RELOCATION);
     should_move_to_shape = false;
-
-
-    #endif
+ 
 }
 
 // 链式补位状态
@@ -1051,7 +979,7 @@ void chainRelocationState() {
         current_shape_entry_robot = 0;
         clear_global_vacancy(); // 清除当前空缺
         should_move_to_shape = true;
-
+        printf("重置状态，开始新一轮\n");
         // 触发新的形状进入
         current_formation_phase = 0;
         return;
@@ -1198,7 +1126,8 @@ void check_relocation_chain_completion(void) {
     // 条件2: 一段时间内没有补位活动
     if (kilo_ticks - last_relocation_activity > 1000) {
         //printf("=== 补位链已完成，切换到下一轮形状进入 ===\n");
-        
+        first_relocation.q = 99;
+        first_relocation.r = 99;
         // 重置状态，开始新一轮
         relocation_chain_complete = 1;
         shape_entry_in_progress = 0;

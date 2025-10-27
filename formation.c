@@ -350,8 +350,11 @@ void setup()
     
     mydata->local_ID_generated = 0;
 #if 1
-    mydata->o_original_position = my_nearest_lattice();
-    mydata->original_position = my_nearest_lattice();
+    struct Hex cur_hex = cart_to_hex((struct Cartesian){kilo_x, kilo_y});
+    mydata->hex_q = cur_hex.q;
+    mydata->hex_r = cur_hex.r;
+    mydata->o_original_position = (struct Hex){mydata->hex_q,mydata->hex_r};
+    mydata->original_position = (struct Hex){mydata->hex_q,mydata->hex_r};
     mydata->shape_position_occupied = 0;
 #endif
     mydata->gradient_value = UINT8_MAX-1;
@@ -463,26 +466,10 @@ void setup()
         printf("Hex %d: (q: %d, r: %d) (q: %d, r: %d) %d\n", i, mydata->lattice_s[i].q, mydata->lattice_s[i].r, mydata->lattice_t[i].q, mydata->lattice_t[i].r, mydata->recycleFlagSeq[i]);
     }
 
-#if 0
-    read_path_from_file("path.txt", &mydata->path, &mydata->path_length, &mydata->total_number_of_path);
-    printf("total number of pathes: %d\n", mydata->total_number_of_path);
-    // printf("%d %d \n", mydata->path[0].q, mydata->path[0].r);
-    int counter = 0;
-    for(int i = 0; i < mydata->total_number_of_path; i++)
-    {
-        printf("length of the %d th path is %d\n", i, mydata->path_length[i]);
-        for(int j = 0; j < mydata->path_length[i]; j++)
-        {
-            printf("%d %d \n", (mydata->path)[counter + j].q, (mydata->path)[counter + j].r);
-        }
-        counter += mydata->path_length[i];
-    }
-#endif
 #if 1
  // 初始化当前机器人的六边形坐标
-    struct Hex nearest_lattice = my_nearest_lattice();
-    mydata->hex_q = nearest_lattice.q;
-    mydata->hex_r = nearest_lattice.r;
+            mydata->hex_q = cur_hex.q;
+            mydata->hex_r = cur_hex.r;
     mydata->relocation_occupied = 0;
     mydata->shape_occupancy = (uint8_t*)malloc(mydata->lattice_shape_size * sizeof(uint8_t));
     for (int i = 0; i < mydata->lattice_shape_size; i++) {
@@ -716,103 +703,6 @@ char *botinfo(void)
 
 
 /////////////////////////////////////////The main loop////////////////////////////////////
-#if 0
-void loop()
-{
-    // remove neighbors in the memory that is older than 2s
-    purgeNeighbors();
-    
-    //receive messages
-    receive_inputs();
-    
-    //Update nearest distance
-    mydata->dist = get_dist_by_ID(mydata->edge_followee_id); 
-    
-    // Initialize reusable counter
-    uint8_t i;
-    
-   //generate temperary local ID
-    if ((mydata->local_ID_generated) == 0)
-    {
-        mydata->local_ID = rand()%256;
-        mydata->local_ID_generated = 1;
-    }
-    else
-    {
-        for (int i = 0; i < mydata->N_Neighbors; i++)
-        {
-            if (mydata->local_ID == mydata->neighbors[i].local_ID)
-                mydata->local_ID_generated =0;
-        }
-    }
-    
-   //Update x, y use localization
-    #if (LOCALIZATION)
-
-        mydata->localizable =  check_localizablitiy();
-
-        // run localization only if there are at least three noncolinear neighbors
-        if(mydata->localizable == 1) 
-        {
-            //non-stop localization
-            if (mydata->localized == 0)
-            {
-                global_localization();
-            }
-
-        }
-
-    #else
-        mydata->x = kilo_x;
-        mydata->y = kilo_y;
-
-    #endif
-    
-    mydata->x_16 = (uint16_t)((mydata->x + x_range) / (2 * x_range) * 65535);
-    mydata->y_16 = (uint16_t)((mydata->y + y_range) / (2 * y_range) * 65535);
-
-
-    //set color for each robot
-
-    set_color(colorNum[kilo_uid % 9 + 1]);
-
-
-    // ///////////////////id= 0, 1, 2, 3 join the shape at the beginning/////////////////
-    // if(kilo_uid == 0 || kilo_uid == 1 || kilo_uid == 2 || kilo_uid== 3|| kilo_uid== 4)
-    // {
-    //     set_move_type(STOP);
-    //     set_bot_state(STOP_OUT);
-    //     set_bot_type(BASE);
-    //     set_motors(0,0);
-    //     mydata->x = kilo_x;
-    //     mydata->y = kilo_y;
-    //     mydata->x_16 = (uint16_t)((kilo_x + x_range) / (2 * x_range) * 65535);
-    //     mydata->y_16 = (uint16_t)((kilo_y + y_range) / (2 * y_range) * 65535);
-    // }
-
-
-    //////////////////State machine///////////////////
-    if(get_bot_type()!= BASE)
-    {
-        if (get_bot_state() == IDLE) idleState();
-        if (get_bot_state() == MOVE_OUT) moveOutState();   
-    }
-
-    //calculate nearest cartesian point in (q,r)
-    struct Cartesian point_in_Cart = {mydata->x, mydata->y};
-    struct Hex myHex = {mydata->hex_q, mydata->hex_r};   
-    struct Hex point_in_Hex = my_nearest_lattice();
-    mydata->hex_q = point_in_Hex.q;
-    mydata->hex_r = point_in_Hex.r;
-
-    //if the robot is not localizable
-    if(mydata->localizable == 0) omni_stop();
-    
-    //send message
-    setup_message();
-
-}
-#else
 void loop()
 {
     check_relocation_chain_completion();
@@ -959,60 +849,6 @@ void loop()
         }
     }
 
-#if 0
-    switch(get_bot_state()) {
-        case IDLE: 
-            // 已经占据，是否需要让位
-            if(mydata->shape_position_occupied){
-                check_relocation_request();
-                return;
-            }//else if(mydata->relocation_occupied){} // 忘了
-            else if (should_move_to_shape) {    // 找位置阶段
-                printf("Robot %d: 🎯 Starting to find shape position\n", kilo_uid);
-                set_bot_state(FIND_SHAPE_POSITION);
-                should_move_to_shape = false;
-            }
-
-            break;
-        case MOVE_OUT: 
-            //moveOutState(); 
-            break;
-        case MOVE_IN:
-            // 原有逻辑
-            break;
-        case STOP_IN:
-            // 原有逻辑  
-            break;
-        // ... 其他原有状态
-        
-        // 新增状态
-        case FIND_SHAPE_POSITION:
-            findShapePositionState();
-            break;
-        case MOVE_TO_SHAPE:
-            moveToShapeState();
-            break;
-        case CHAIN_RELOCATION:
-            chainRelocationState();
-            break;
-        case MAINTAIN_POSITION:
-            maintainPositionState();
-            break;
-    
-}
-#endif 
-
-/*
-    //calculate nearest cartesian point in (q,r)
-    struct Cartesian point_in_Cart = {mydata->x, mydata->y};
-    struct Hex myHex = {mydata->hex_q, mydata->hex_r};
-
-// 不能这么定位；
-    struct Hex point_in_Hex = my_nearest_lattice();
-    mydata->hex_q = point_in_Hex.q;
-    mydata->hex_r = point_in_Hex.r;
-    #endif
-*/
     //if the robot is not localizable
     if(mydata->localizable == 0) omni_stop();
   
@@ -1020,7 +856,6 @@ void loop()
     setup_message();
 #endif 
 }
-#endif
 
 //////////////////main/////////////////////
 
