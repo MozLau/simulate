@@ -47,7 +47,96 @@ uint8_t relocation_chance = 0;
 uint8_t relocation_chain_complete = 0;
 uint32_t last_relocation_activity = 0;
 
+double hex_distance(int q1, int r1, int q2, int r2) {
+    return (abs(q1 - q2) + abs(q1 + r1 - q2 - r2) + abs(r1 - r2)) / 2.0;
+}
 // 统一的占用状态更新函数
+int check_target_localizability(struct Hex start, struct Hex target)
+{
+    int localized_bot_count = 0;
+    int cnt = 0;
+    int flag[20] = {};
+    printf("start checking neibors localizability\n");
+    for (int i = 0; i < mydata->N_Neighbors; i++)
+    {
+        if (mydata->neighbors[i].localized == 1)
+        {
+            struct Hex x = {mydata->neighbors[i].hex_q, mydata->neighbors[i].hex_r};
+            int da = (int)hex_distance(start.q,start.r, x.q,x.r);
+            int db = (int)hex_distance(target.q,target.r, x.q,x.r);
+            // printf("for point %d %d, da = %d, db = %d\n", x.q, x.r, da, db);
+            if(da <= 2 && db <= 2)
+            {
+                localized_bot_count ++;
+                flag[cnt] = i;
+                cnt++;
+                // printf("%d %d is in range\n", x.q, x.r);
+            }
+        }
+        else
+            printf("%d %d is not localizable\n", mydata->neighbors[i].hex_q, mydata->neighbors[i].hex_r);
+    }
+
+    if(localized_bot_count >= 3){
+        //check if all points on the same line
+        double dx1 = mydata->neighbors[flag[1]].x - mydata->neighbors[flag[0]].x;
+        double dy1 = mydata->neighbors[flag[1]].y - mydata->neighbors[flag[0]].y;
+
+        for (int i = 2; i < localized_bot_count; i++)
+        {
+            double dx2 = mydata->neighbors[flag[i]].x - mydata->neighbors[flag[0]].x;
+            double dy2 = mydata->neighbors[flag[i]].y - mydata->neighbors[flag[0]].y;
+
+            //if slope not the same
+            if (fabs(dy1 * dx2 - dy2 * dx1) > 0.01 * kilo_lattice_size * kilo_lattice_size * 0.25)
+            {
+                return 1;
+            }
+        }
+        return 0;
+    }
+    else{
+        return 0;
+    }
+}
+int check_myself_localizablitiy(int q,int r)
+{
+    int localized_bot_count = 0;
+
+    for (int i = 0; i < mydata->N_Neighbors; i++)
+    {
+        if (mydata->neighbors[i].localized == 1)
+        {
+            localized_bot_count ++;
+        }
+    }
+
+    if(localized_bot_count >= 3){
+
+        //check if all points on the same line
+        double dx1 = mydata->neighbors[1].x - mydata->neighbors[0].x;
+        double dy1 = mydata->neighbors[1].y - mydata->neighbors[0].y;
+
+        for (int i = 2; i < mydata->N_Neighbors; i++)
+        {
+            if (mydata->neighbors[i].localized != 1) continue;
+
+            double dx2 = mydata->neighbors[i].x - mydata->neighbors[0].x;
+            double dy2 = mydata->neighbors[i].y - mydata->neighbors[0].y;
+
+            //if slope not the same
+            if (fabs(dy1 * dx2 - dy2 * dx1) > 0.01 * kilo_lattice_size * kilo_lattice_size * 0.25)
+            {
+                return 1;
+            }
+        }
+
+        return 0;
+    }
+    else{
+        return 0;
+    }
+}
 void update_occupancy(int shape_index, uint8_t occupied) {
     if (shape_index < 0 || shape_index >= mydata->lattice_shape_size) {
         printf("Robot %d: ERROR - 更新形状占用数组失败\n", kilo_uid, shape_index);
@@ -134,10 +223,6 @@ struct Hex cart_to_hex(struct Cartesian cart) {
     struct Hex hex = {q_round, r_round};
     
     return hex;
-}
-
-double hex_distance(int q1, int r1, int q2, int r2) {
-    return (abs(q1 - q2) + abs(q1 + r1 - q2 - r2) + abs(r1 - r2)) / 2.0;
 }
 
 // 快速从笛卡尔坐标获取六边形坐标
@@ -555,7 +640,6 @@ struct Hex find_nearest_unoccupied_target() {
     struct Hex best = {99, 99};
     double best_dist = INFINITY;
 
-    int localizable = check_localizablitiy();
     
     for (int i = 0; i < mydata->lattice_shape_size; i++) {
         int q = mydata->lattice_shape[i].q;
@@ -573,26 +657,7 @@ struct Hex find_nearest_unoccupied_target() {
             continue;
         }
 
-        // ✅ 修改：无论是否可定位，目标点都必须在通信范围内
-        int in_range_count = 0;
-        for (int j = 0; j < mydata->N_Neighbors; j++) {
-            if (mydata->neighbors[j].localized == 1) {
-                double dist_to_neighbor = hex_distance(
-                    mydata->neighbors[j].hex_q, 
-                    mydata->neighbors[j].hex_r, 
-                    q, r
-                );
-                
-                if (dist_to_neighbor <= 120.0) {
-                    in_range_count++;
-                }
-            }
-        }
-        
-        // 只有目标点在至少三个已定位邻居的通信范围内才考虑
-        if (in_range_count < 3) {
-            continue;
-        }
+        if(!check_target_localizability((struct Hex){mydata->hex_q,mydata->hex_r},(struct Hex){q,r})) continue;
 
         double dist = hex_distance(mydata->hex_q, mydata->hex_r, q, r);
         if (dist < best_dist) {
@@ -959,6 +1024,8 @@ void checkChainRelocationOpportunity(void) {
     if (!is_hex_adjacent(my_hex, global_vacancy)) {   
         return; // 不相邻，不参与补位
     }
+
+    if(!check_target_localizability((struct Hex){my_hex.q,my_hex.r},(struct Hex){global_vacancy.q,global_vacancy.r})) continue;
      /* 
     // 与形状距离为1 不补位
     struct Hex target = find_nearest_unoccupied_target();
@@ -969,7 +1036,7 @@ void checkChainRelocationOpportunity(void) {
     */
 
 
-/*
+
 #if 0
     if( my_hex.q == global_vacancy.q){
 #else
@@ -978,7 +1045,7 @@ void checkChainRelocationOpportunity(void) {
 
       return;
     }
-*/
+
 
 
 
@@ -1054,11 +1121,14 @@ void checkChainRelocationOpportunity(void) {
         return;
     }
 
+    if(!check_target_localizability((struct Hex){my_hex.q,my_hex.r},(struct Hex){global_vacancy.q,global_vacancy.r})) return;
+
     // 不相邻就不补位
+    #if 1
     if (!is_hex_adjacent(my_hex, global_vacancy)) {   
         return; // 不相邻，不参与补位
     }
-
+#endif
     // ✅ 新增条件：检查补位目标点是否在邻居通信范围内
     
         // 检查补位目标点是否在至少三个邻居的通信范围内
@@ -1075,17 +1145,17 @@ void checkChainRelocationOpportunity(void) {
     */
 
 
-
+#if 1
 #if 0
     if( my_hex.q == global_vacancy.q){
 #else
     if(my_hex.r == global_vacancy.r){
 #endif
 
-      return;
+    return;
     }
 
-
+#endif
 
 
     relocation_chain_complete = 0;
