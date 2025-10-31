@@ -1039,11 +1039,11 @@ int omni_move_to_lattice(struct Hex *point) {
     float target_x = (*point).q * dx + (*point).r * 0.5f * dx;    
     float target_y = (*point).r * dy;
 
-    struct Hex current_hex = get_hex_from_cartesian(kilo_x,kilo_y);
+    struct Hex current_hex = get_hex_from_cartesian(mydata->x,mydata->y);
   
     // Calculate the direction to the target
-    //float target_direction = atan2(target_y - mydata->y, target_x - mydata->x);
-    float target_direction = atan2(target_y - kilo_y, target_x - kilo_x);
+    //float target_direction = atan2(target_y - mydata->y, target_x - myda ta->x);
+    float target_direction = atan2(target_y - mydata->y, target_x - mydata->x);
 // 等待几帧
 // 再打印一次
     //double direction = 1;
@@ -1052,16 +1052,20 @@ int omni_move_to_lattice(struct Hex *point) {
 
     if (fabs(kilo_direction - target_direction)<0.01)
     {
-        float epsilon = 0.5; // tolerance
-        float distance = sqrt(pow(kilo_x - target_x,2) + pow(kilo_y - target_y,2));
-        //printf("距离目标点 (%d,%d) %f, 当前的位置是(%0.1f,%0.1f)\n",point->q,point->r,distance,kilo_x,kilo_y);
-
+        float epsilon = 10; // tolerance
+        float distance = sqrt(pow(mydata->x - target_x,2) + pow(mydata->y - target_y,2));
+        if(kilo_uid == 0){
+        printf("当前位置(%d,%d),距离目标点 (%d,%d) %f, 当前的位置是(%0.1f,%0.1f)\n",mydata->hex_q,mydata->hex_r,point->q,point->r,distance,mydata->x,mydata->y);
+        }
         if (distance > epsilon && distance > 15.0) {
             target_speed(OMNI_SPEED,0);
+
+            
         
         }else if(distance > epsilon && distance <= 15.0){
             //printf("当前速度是%0.5f\n",distance*0.5f);
             target_speed(distance*0.5f,0); //slow down when approaching
+    
         }else{
             target_speed(0,0);
             return 1;

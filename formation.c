@@ -458,7 +458,11 @@ void setup()
     mydata->lattice_shape_size = 0;
 
     // Call the function to read the groups from the file
-    read_boundary_from_file("shape_data.txt", &mydata->lattice_shape, &mydata->lattice_shape_size, &mydata->lattice_s, &mydata->lattice_s_size, &mydata->lattice_t, &mydata->lattice_t_size, &mydata->recycleFlagSeq);
+    read_boundary_from_file("shape_data.txt",
+         &mydata->lattice_shape, &mydata->lattice_shape_size,
+          &mydata->lattice_s, &mydata->lattice_s_size,
+           &mydata->lattice_t, &mydata->lattice_t_size,
+            &mydata->recycleFlagSeq);
 
     printf("\nSequence size %d:\n", mydata->lattice_s_size);
     int a = (int)mydata->lattice_s_size * 0.5;
@@ -744,12 +748,13 @@ void loop()
         // run localization only if there are at least three noncolinear neighbors
         if(mydata->localizable == 1) 
         {
+
             //non-stop localization
             if (mydata->localized == 0)
             {
-                printf("全局更新坐标\n");
                 global_localization();
             }
+
 
         }
 
@@ -758,6 +763,7 @@ void loop()
         mydata->y = kilo_y;
 
     #endif
+
 
     mydata->x_16 = (uint16_t)((mydata->x + x_range) / (2 * x_range) * 65535);
     mydata->y_16 = (uint16_t)((mydata->y + y_range) / (2 * y_range) * 65535);
@@ -783,13 +789,7 @@ void loop()
 
 
     //////////////////State machine///////////////////
-#if 0
-    if(get_bot_type()!= BASE)
-    {
-        if (get_bot_state() == IDLE) idleState();
-        if (get_bot_state() == MOVE_OUT) moveOutState();   
-    }
-#else
+
     // 检查需要重新找位置的是不是自己，是的话直接去找位置了。
     if(global_relocation_request.q !=99 && global_relocation_request.r !=99
          && global_relocation_request.q == mydata->hex_q && global_relocation_request.r == mydata->hex_r){
@@ -854,7 +854,7 @@ void loop()
   
     //send message
     setup_message();
-#endif 
+
 }
 
 //////////////////main/////////////////////

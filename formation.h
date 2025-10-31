@@ -69,7 +69,7 @@ enum BOTSTATE {
 #endif
 enum FAULTTYPE {NIL, FOUT, FIN, FSUB};
 
-#define LOCALIZATION 0
+#define LOCALIZATION 1
 #define SHOW_LOCALIZED 0
 #define USE_DISMISS 1
 #define SHOW_INNER_BOUNDARY 0
