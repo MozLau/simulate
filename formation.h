@@ -176,6 +176,17 @@ typedef struct {
 
     uint8_t shape_position_occupied;
     
+    uint8_t is_moving;
+    uint8_t has_movement_intent;
+    struct Hex intended_target;
+    uint32_t target_intent_time;        // 目标意图时间
+    uint8_t movement_priority;
+
+    struct Hex known_vacancy;           // 已知的空缺位置
+    uint32_t vacancy_timestamp;         // 空缺信息的时间戳
+    uint8_t has_relocation_intent;      // 是否有补位意图
+    struct Hex relocation_target; 
+
 } Neighbor_t;
 
 
@@ -357,8 +368,27 @@ typedef struct
     uint32_t total_relocation_time;  // 累计补位时间
 
 #endif
+
+#if 1
+    uint8_t is_moving;                    // 是否正在移动
+    uint8_t movement_priority;           // 移动优先级（可用于解决冲突）
+    uint32_t movement_start_time;        // 移动开始时间
+    uint8_t has_movement_intent;         // 是否有移动意图
+    struct Hex intended_target;          // 意图移动的目标位置
+    uint32_t target_intent_time;        // 目标意图时间
     
-    
+    // 添加移动协调相关字段
+    uint8_t can_move;                    // 是否可以开始移动
+    uint32_t last_movement_check;        // 上次检查移动的时间
+
+    // 分布式补位相关字段
+    struct Hex known_vacancy;           // 已知的空缺位置
+    uint32_t vacancy_timestamp;         // 空缺信息的时间戳
+    uint8_t has_relocation_intent;      // 是否有补位意图
+    struct Hex relocation_target;       // 补位目标位置
+    struct Hex relocation_source;       // 补位来源位置
+
+#endif
 
 } MyUserdata;
 

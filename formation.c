@@ -154,6 +154,20 @@ void process_message()
                 mydata->neighbors[i].faulty_type_tick = data[49] | (data[50] << 8) | (data[51] << 16)| (data[52] << 24);
                 mydata->neighbors[i].shape_position_occupied = data[53];
 
+                mydata->neighbors[i].is_moving = data[54];
+                mydata->neighbors[i].has_movement_intent = data[55];
+                mydata->neighbors[i].intended_target.q = (int8_t)data[56];
+                mydata->neighbors[i].intended_target.r = (int8_t)data[57];
+                mydata->neighbors[i].target_intent_time = data[58] | (data[59] << 8);
+        mydata->neighbors[i].movement_priority = data[60];
+
+        mydata->neighbors[i].known_vacancy.q = data[61];
+    mydata->neighbors[i].known_vacancy.r = data[62];
+    mydata->neighbors[i].vacancy_timestamp = data[63] | (data[64] << 8);
+    mydata->neighbors[i].has_relocation_intent = data[65];
+    mydata->neighbors[i].relocation_target.q = data[66];
+    mydata->neighbors[i].relocation_target.r = data[67];
+
                 return;
             }
         
@@ -217,6 +231,19 @@ void process_message()
         mydata->neighbors[i].faulty_type = data[48];
         mydata->neighbors[i].faulty_type_tick = data[49] | (data[50] << 8) | (data[51] << 16)| (data[52] << 24);
         mydata->neighbors[i].shape_position_occupied = data[53];
+        mydata->neighbors[i].is_moving = data[54];
+        mydata->neighbors[i].has_movement_intent = data[55];
+        mydata->neighbors[i].intended_target.q = (int8_t)data[56];
+        mydata->neighbors[i].intended_target.r = (int8_t)data[57];
+        mydata->neighbors[i].target_intent_time = data[58] | (data[59] << 8);
+        mydata->neighbors[i].movement_priority = data[60];
+
+        mydata->neighbors[i].known_vacancy.q = data[61];
+    mydata->neighbors[i].known_vacancy.r = data[62];
+    mydata->neighbors[i].vacancy_timestamp = data[63] | (data[64] << 8);
+    mydata->neighbors[i].has_relocation_intent = data[65];
+    mydata->neighbors[i].relocation_target.q = data[66];
+    mydata->neighbors[i].relocation_target.r = data[67];
 }
 
 /* Go through the list of neighbors, remove entries older than a threshold,
@@ -320,6 +347,22 @@ void setup_message(void)
         mydata->transmit_msg.data[52] = (mydata->faulty_type_tick >> 24) & 0xff;       // 3 high ID
         #if 1
         mydata->transmit_msg.data[53] = mydata->shape_position_occupied;
+
+        mydata->transmit_msg.data[54] = mydata->is_moving;
+        mydata->transmit_msg.data[55] = mydata->has_movement_intent;
+        mydata->transmit_msg.data[56] = (int8_t)mydata->intended_target.q;
+        mydata->transmit_msg.data[57] = (int8_t)mydata->intended_target.r;
+        mydata->transmit_msg.data[58] = mydata->target_intent_time & 0xFF;
+        mydata->transmit_msg.data[59] = (mydata->target_intent_time >> 8) & 0xFF;
+        mydata->transmit_msg.data[60] = mydata->movement_priority;
+
+        mydata->transmit_msg.data[61] = mydata->known_vacancy.q;
+    mydata->transmit_msg.data[62] = mydata->known_vacancy.r;
+    mydata->transmit_msg.data[63] = mydata->vacancy_timestamp & 0xFF;
+    mydata->transmit_msg.data[64] = (mydata->vacancy_timestamp >> 8) & 0xFF;
+    mydata->transmit_msg.data[65] = mydata->has_relocation_intent;
+    mydata->transmit_msg.data[66] = mydata->relocation_target.q;
+    mydata->transmit_msg.data[67] = mydata->relocation_target.r;
 
         #endif 
         
@@ -491,6 +534,16 @@ void setup()
         }
     }
 #endif
+
+    // 初始化移动协调字段
+    mydata->is_moving = 0;
+    mydata->has_movement_intent = 0;
+    mydata->intended_target = (struct Hex){99, 99};
+    mydata->movement_priority = 0;
+    mydata->target_intent_time = 0;
+    mydata->movement_start_time = 0;
+    mydata->can_move = 0;
+    mydata->last_movement_check = 0;
 
     mydata->path_point_index = 0;
     init_move_history();
@@ -709,7 +762,7 @@ char *botinfo(void)
 /////////////////////////////////////////The main loop////////////////////////////////////
 void loop()
 {
-    check_relocation_chain_completion();
+
     // remove neighbors in the memory that is older than 2s
     purgeNeighbors();
     
@@ -773,60 +826,42 @@ void loop()
 
     set_color(colorNum[kilo_uid % 9 + 1]);
 
+    checkChainRelocationOpportunity_distributed();
 
-       
-    if(!any_robot_relocating){
-        // 检查链式补位机会
-        checkChainRelocationOpportunity();
-    } 
         
-    if(any_robot_relocating && relocating_robot_id == kilo_uid){
-        chainRelocationState();
-    }else{
-        switch(get_bot_state()) {
-        case IDLE: 
-            // 已经占据，是否需要让位
-            if (should_move_to_shape) {    // 找位置阶段
-                printf("Robot %d: 🎯 Starting to find shape position\n", kilo_uid);
-                #if 0
-                if(is_bot_state_with_cooldown()){
-                    printf("冷却时间：%d\n", kilo_ticks);
-                   
-                }else{
-                    printf("设置时间：%d\n", kilo_ticks);
-                    set_bot_state(FIND_SHAPE_POSITION);
-                    should_move_to_shape = false;
-                }
-                #else
-                set_bot_state(FIND_SHAPE_POSITION);
-                should_move_to_shape = false;
-                #endif
-            }
+    
+    switch(get_bot_state()) {
+    case IDLE: 
+        if (can_safely_start_movement()) {    // 找位置阶段
+            printf("Robot %d: 🎯 Starting to find shape position\n", kilo_uid);
+            set_bot_state(FIND_SHAPE_POSITION);
 
-            break;
-        case MOVE_OUT: 
-            //moveOutState(); 
-            break;
-        case MOVE_IN:
-            // 原有逻辑
-            break;
-        case STOP_IN:
-            // 原有逻辑  
-            break;
-        // ... 其他原有状态
-        
-        // 新增状态
-        case FIND_SHAPE_POSITION:
-            findShapePositionState();
-            break;
-        case MOVE_TO_SHAPE:
-            moveToShapeState();
-            break;
-        case CHAIN_RELOCATION:
-            chainRelocationState();
-            break;
         }
+
+        break;
+    case MOVE_OUT: 
+        //moveOutState(); 
+        break;
+    case MOVE_IN:
+        // 原有逻辑
+        break;
+    case STOP_IN:
+        // 原有逻辑  
+        break;
+    // ... 其他原有状态
+    
+    // 新增状态
+    case FIND_SHAPE_POSITION:
+        findShapePositionState_distributed();
+        break;
+    case MOVE_TO_SHAPE:
+        moveToShapeState_distributed();
+        break;
+    case CHAIN_RELOCATION:
+        chainRelocationState_distributed();
+        break;
     }
+    
 
     //if the robot is not localizable
     //if(mydata->localizable == 0) omni_stop();
