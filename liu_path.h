@@ -11,7 +11,7 @@
 
 uint8_t is_occupied[200][200] = {0};
 uint8_t occupied = 0;
-
+uint8_t have_oucciped_count = 0;
 struct Hex global_vacancy = {99,99};
 bool global_vacancy_in_shape = false;
 uint8_t vacancy_exists = 0;
@@ -26,12 +26,7 @@ uint32_t last_shape_entry_tick = 0; // 上次有机器人开始进入形状的�
 struct Hex global_relocation_request = {99, 99};
 struct Hex global_relocation_requester = {99, 99};
 uint8_t relocation_request_active = 0;
-uint8_t num_rangwei = 0;
 
-// 防止振荡
-// 全局变量记录最近的让位历史
-struct Hex last_relocation_robots[2];
-int relocation_history_count = 0;
 
 // 补位完成检测
 // 全局变量
@@ -47,96 +42,127 @@ uint8_t relocation_chance = 0;
 uint8_t relocation_chain_complete = 0;
 uint32_t last_relocation_activity = 0;
 
+void init_move_history() {
+    for (int i = 0; i < 5; i++) {
+        mydata->move_tracker.move_history[i] = (struct Hex){0, 0};
+    }
+    mydata->move_tracker.history_index = 0;
+    mydata->move_tracker.history_initialized = false;
+}
+
+void record_move(struct Hex new_pos) {
+    mydata->move_tracker.move_history[mydata->move_tracker.history_index] = new_pos;
+    mydata->move_tracker.history_index = (mydata->move_tracker.history_index + 1) % 5;
+    mydata->move_tracker.history_initialized = true;
+}
+
+bool is_position_in_history(struct Hex target_pos) {
+    if (!mydata->move_tracker.history_initialized) {
+        return false;
+    }
+    
+    for (int i = 0; i < 5; i++) {
+        // 跳过未记录的位置
+        if (mydata->move_tracker.move_history[i].q == 0 && 
+            mydata->move_tracker.move_history[i].r == 0) {
+            continue;
+        }
+        
+        if (mydata->move_tracker.move_history[i].q == target_pos.q && 
+            mydata->move_tracker.move_history[i].r == target_pos.r) {
+            return true;
+        }
+    }
+    return false;
+}
+
 double hex_distance(int q1, int r1, int q2, int r2) {
     return (abs(q1 - q2) + abs(q1 + r1 - q2 - r2) + abs(r1 - r2)) / 2.0;
 }
-// 统一的占用状态更新函数
+
+
 int check_target_localizability(struct Hex start, struct Hex target)
 {
     int localized_bot_count = 0;
+    int valid_neighbor_indices[20] = {};  // 存储有效的邻居索引
     int cnt = 0;
-    int flag[20] = {};
-    printf("start checking neibors localizability\n");
+
     for (int i = 0; i < mydata->N_Neighbors; i++)
     {
         if (mydata->neighbors[i].localized == 1)
         {
-            struct Hex x = {mydata->neighbors[i].hex_q, mydata->neighbors[i].hex_r};
-            int da = (int)hex_distance(start.q,start.r, x.q,x.r);
-            int db = (int)hex_distance(target.q,target.r, x.q,x.r);
-            // printf("for point %d %d, da = %d, db = %d\n", x.q, x.r, da, db);
-            if(da <= 2 && db <= 2)
+            #if 0
+            // ✅ 修复：只检查目标点与邻居的距离
+            double dist_to_target = hex_distance(target.q, target.r, 
+                                               mydata->neighbors[i].hex_q, 
+                                               mydata->neighbors[i].hex_r);
+            
+            // 如果目标点在邻居的通信范围内
+            if(dist_to_target <= 2.0)  // 使用你的通信范围，比如2格
             {
-                localized_bot_count ++;
-                flag[cnt] = i;
+                localized_bot_count++;
+                valid_neighbor_indices[cnt] = i;
                 cnt++;
-                // printf("%d %d is in range\n", x.q, x.r);
             }
-        }
-        else
-            printf("%d %d is not localizable\n", mydata->neighbors[i].hex_q, mydata->neighbors[i].hex_r);
-    }
-
-    if(localized_bot_count >= 3){
-        //check if all points on the same line
-        double dx1 = mydata->neighbors[flag[1]].x - mydata->neighbors[flag[0]].x;
-        double dy1 = mydata->neighbors[flag[1]].y - mydata->neighbors[flag[0]].y;
-
-        for (int i = 2; i < localized_bot_count; i++)
-        {
-            double dx2 = mydata->neighbors[flag[i]].x - mydata->neighbors[flag[0]].x;
-            double dy2 = mydata->neighbors[flag[i]].y - mydata->neighbors[flag[0]].y;
-
-            //if slope not the same
-            if (fabs(dy1 * dx2 - dy2 * dx1) > 0.01 * kilo_lattice_size * kilo_lattice_size * 0.25)
+            #else
+            struct Cartesian start_cart = hex_to_Cart(start);
+            struct Cartesian target_cart = hex_to_Cart(target);
+            // 在 check_target_localizability 中改为物理距离：
+            double dist_to_target = sqrt(
+                pow(target_cart.x - mydata->neighbors[i].x, 2) + 
+                pow(target_cart.y - mydata->neighbors[i].y, 2)
+            );
+            if (dist_to_target <= 120.0)  // 使用物理距离，120单位
             {
-                return 1;
+                localized_bot_count++;
+                valid_neighbor_indices[cnt] = i;
+                cnt++;
+            }
+            #endif
+        }
+    }
+
+    if (localized_bot_count >= 3) {
+        // 检查是否存在任意三个不共线的点
+        for (int i = 0; i < localized_bot_count; i++) {
+            for (int j = i + 1; j < localized_bot_count; j++) {
+                for (int k = j + 1; k < localized_bot_count; k++) {
+                    int idx_i = valid_neighbor_indices[i];
+                    int idx_j = valid_neighbor_indices[j]; 
+                    int idx_k = valid_neighbor_indices[k];
+                    
+                    double dx1 = mydata->neighbors[idx_j].x - mydata->neighbors[idx_i].x;
+                    double dy1 = mydata->neighbors[idx_j].y - mydata->neighbors[idx_i].y;
+                    double dx2 = mydata->neighbors[idx_k].x - mydata->neighbors[idx_i].x;
+                    double dy2 = mydata->neighbors[idx_k].y - mydata->neighbors[idx_i].y;
+
+                    double cross = fabs(dx1 * dy2 - dx2 * dy1);
+                    double tol = 0.01 * kilo_lattice_size * kilo_lattice_size * 0.25;
+
+                    if (cross > tol) {
+                        return 1;  // 找到一组不共线的三点
+                    }
+                }
             }
         }
-        return 0;
-    }
-    else{
+        return 0;  // 所有三元组都共线
+    } else {
         return 0;
     }
 }
-int check_myself_localizablitiy(int q,int r)
-{
-    int localized_bot_count = 0;
 
-    for (int i = 0; i < mydata->N_Neighbors; i++)
-    {
-        if (mydata->neighbors[i].localized == 1)
-        {
-            localized_bot_count ++;
-        }
-    }
-
-    if(localized_bot_count >= 3){
-
-        //check if all points on the same line
-        double dx1 = mydata->neighbors[1].x - mydata->neighbors[0].x;
-        double dy1 = mydata->neighbors[1].y - mydata->neighbors[0].y;
-
-        for (int i = 2; i < mydata->N_Neighbors; i++)
-        {
-            if (mydata->neighbors[i].localized != 1) continue;
-
-            double dx2 = mydata->neighbors[i].x - mydata->neighbors[0].x;
-            double dy2 = mydata->neighbors[i].y - mydata->neighbors[0].y;
-
-            //if slope not the same
-            if (fabs(dy1 * dx2 - dy2 * dx1) > 0.01 * kilo_lattice_size * kilo_lattice_size * 0.25)
-            {
-                return 1;
+int count_occupied_positions() {
+    int occupied_count = 0;
+    for (int q = -100; q <= 100; q++) {
+        for (int r = -100; r <= 100; r++) {
+            if (is_occupied[q + 100][r + 100] == 1) {
+                occupied_count++;
             }
         }
-
-        return 0;
     }
-    else{
-        return 0;
-    }
+    return occupied_count;
 }
+
 void update_occupancy(int shape_index, uint8_t occupied) {
     if (shape_index < 0 || shape_index >= mydata->lattice_shape_size) {
         printf("Robot %d: ERROR - 更新形状占用数组失败\n", kilo_uid, shape_index);
@@ -307,53 +333,48 @@ bool is_position_in_shape(struct Hex pos) {
     return false;
 }
 
-
-bool is_collision_imminent(struct Hex target_pos) {
+bool is_collision_imminent(struct Hex current_pos, struct Hex target_pos) {
+    struct Cartesian current_cart = hex_to_Cart(current_pos);
     struct Cartesian target_cart = hex_to_Cart(target_pos);
-    struct Cartesian my_cart = {kilo_x, kilo_y};
     
-    //printf("STEP1: 我的位置 kilo_x=%.1f, kilo_y=%.1f\n", kilo_x, kilo_y);
-    //printf("STEP1: 目标六角坐标(%d,%d) -> 笛卡尔(%.1f,%.1f)\n", target_pos.q, target_pos.r, target_cart.x, target_cart.y);
-    
-    float move_dx = target_cart.x - my_cart.x;
-    float move_dy = target_cart.y - my_cart.y;
-    //printf("STEP2: 移动向量 dx=%.1f, dy=%.1f\n", move_dx, move_dy);
-    
+    float move_dx = target_cart.x - current_cart.x;
+    float move_dy = target_cart.y - current_cart.y;
     float move_distance = sqrt(move_dx * move_dx + move_dy * move_dy);
-    //printf("STEP3: 移动距离=%.1f\n", move_distance);
     
     if (move_distance < 0.001) return false;
     
     // 归一化
     float norm_dx = move_dx / move_distance;
     float norm_dy = move_dy / move_distance;
-    //printf("STEP4: 归一化方向 (%.3f, %.3f)\n", norm_dx, norm_dy);
     
     for (int i = 0; i < mydata->N_Neighbors; i++) {
-        // 使用六边形坐标重新计算邻居位置，避免存储误差
         struct Hex neighbor_hex = {mydata->neighbors[i].hex_q, mydata->neighbors[i].hex_r};
         struct Cartesian neighbor_cart = hex_to_Cart(neighbor_hex);
         
-        float nx = neighbor_cart.x - my_cart.x;
-        float ny = neighbor_cart.y - my_cart.y;
+        float nx = neighbor_cart.x - current_cart.x;
+        float ny = neighbor_cart.y - current_cart.y;
         float neighbor_distance = sqrt(nx * nx + ny * ny);
         
         if (neighbor_distance < 25.0) {
             return true;
         }
         
-        // 投影距离
-        float projection = nx * move_dx + ny * move_dy;
-        
-        // 正确的垂直距离计算
-        //float perpendicular_distance = sqrt(neighbor_distance * neighbor_distance - projection * projection);
-        float perpendicular_distance = fabs(nx * move_dy - ny * move_dx) / move_distance;
-        
+        float projection = nx * norm_dx + ny * norm_dy;
+        float perpendicular_distance = fabs(nx * norm_dy - ny * norm_dx);
         
         if (projection > -10 && 
-            perpendicular_distance < 34 && projection < move_distance + 20.0
-          ) {
-                printf("Robot %d: 检测到碰撞风险！邻居 %d,坐标(%d,%d), 垂直距离=%.1f, 投影=%.1f\n", kilo_uid, mydata->neighbors[i].ID, mydata->neighbors[i].hex_q,mydata->neighbors[i].hex_r,perpendicular_distance, projection);
+            perpendicular_distance < 34 && 
+            projection < move_distance + 20.0) {
+            #if 0
+            #if 0
+            printf("当前六角(%d,%d)->物理(%.1f,%.1f)\n", current_pos.q, current_pos.r, current_cart.x, current_cart.y);
+            printf("目标六角(%d,%d)->物理(%.1f,%.1f)\n", target_pos.q, target_pos.r, target_cart.x, target_cart.y);
+            printf("邻居六角(%d,%d)->物理(%.1f,%.1f)\n", neighbor_hex.q, neighbor_hex.r, neighbor_cart.x, neighbor_cart.y);
+            #endif
+            printf("Robot %d: 检测到碰撞风险！邻居 %d,坐标(%d,%d), 垂直距离=%.1f, 投影=%.1f\n", 
+                   kilo_uid, mydata->neighbors[i].ID, mydata->neighbors[i].hex_q, mydata->neighbors[i].hex_r,
+                   perpendicular_distance, projection);
+            #endif
             return true;
         }
     }
@@ -370,7 +391,7 @@ struct Hex find_blocking_robot(struct Hex start, struct Hex target) {
 
         // 找到第一个阻挡路径的形状内机器人
         for (int j = 0; j < mydata->N_Neighbors; j++) {
-            if (mydata->neighbors[j].shape_position_occupied &&
+            if (mydata->neighbors[j ].shape_position_occupied &&
                 mydata->neighbors[j].hex_q == path_hexes[i].q &&
                 mydata->neighbors[j].hex_r == path_hexes[i].r) {
                 return (struct Hex){mydata->neighbors[j].hex_q, mydata->neighbors[j].hex_r};
@@ -416,63 +437,8 @@ bool is_robot_at_position(int q, int r) {
     return false;
 }
 
-int get_robot_id_at(int q, int r) {
-    for (int i = 0; i < mydata->N_Neighbors; i++) {
-        if (mydata->neighbors[i].hex_q == q && mydata->neighbors[i].hex_r == r) {
-            return mydata->neighbors[i].ID;
-        }
-    }
-    return -1; // 没有找到机器人
-}
 
-int get_shape_neighbors(struct Hex pos, struct Hex *neighbors) {
-    struct Hex directions[6] = {{1,0}, {1,-1}, {0,-1}, {-1,0}, {-1,1}, {0,1}};
-    int count = 0;
-    
-    for (int i = 0; i < 6; i++) {
-        struct Hex neighbor = {pos.q + directions[i].q, pos.r + directions[i].r};
-        if (is_robot_in_shape(neighbor.q, neighbor.r) && 
-            is_robot_at_position(neighbor.q, neighbor.r) && // 该位置有机器人
-            get_robot_id_at(neighbor.q, neighbor.r) != 0) { // 且不是机器人0
-            neighbors[count] = neighbor;
-            count++;
-        }
-    }
-    return count;
-}
-
-
-void set_global_relocation_request(struct Hex blocking_robot, struct Hex requester_pos) {
-    global_relocation_request = blocking_robot;
-    global_relocation_requester = requester_pos;
-    relocation_request_active = 1;
-    printf("=== 全局让位请求：机器人 (%d,%d) 为 (%d,%d) 让位 ===\n",
-           blocking_robot.q, blocking_robot.r, requester_pos.q, requester_pos.r);
-}
-
-struct Hex find_top_robot_in_shape(void) {
-    struct Hex top_robot = {99, 99};
-    int max_r = -999;
-    
-    for (int i = 0; i < mydata->N_Neighbors; i++) {
-        if (is_robot_in_shape(mydata->neighbors[i].hex_q, mydata->neighbors[i].hex_r) &&
-            mydata->neighbors[i].ID != 0) { // 排除机器人0
-            
-            if (mydata->neighbors[i].hex_r > max_r) {
-                max_r = mydata->neighbors[i].hex_r;
-                top_robot.q = mydata->neighbors[i].hex_q;
-                top_robot.r = mydata->neighbors[i].hex_r;
-            }
-        }
-    }
-    
-    if (top_robot.q != 99) {
-        printf("找到最上方机器人 (%d,%d)\n", top_robot.q, top_robot.r);
-    }
-    
-    return top_robot;
-}
-
+/*
 void request_shape_robots_to_relocate(struct Hex requester_pos, struct Hex target_pos) {
     // 找到阻挡路径的形状内机器人
     struct Hex blocking_robot = find_blocking_robot(requester_pos, target_pos);
@@ -493,7 +459,7 @@ struct Hex find_alternative_path(struct Hex start, struct Hex target) {
         {1, 0}, {1, -1}, {0, -1}, 
         {-1, 0}, {-1, 1}, {0, 1}
     };
-    printf("当前点为：（%d，%d）\n", start.q, start.r);
+    printf("机器人 %d 当前点为：（%d，%d）\n", kilo_uid,start.q, start.r);
     
     // 首先检查是否可定位
     int localizable = check_localizablitiy();
@@ -514,9 +480,14 @@ struct Hex find_alternative_path(struct Hex start, struct Hex target) {
             for (int j = 0; j < mydata->N_Neighbors; j++) {
                 if (mydata->neighbors[j].localized == 1) {
                     // 计算中间点与邻居的物理距离
+                    #if 0
                     double intermediate_x = intermediate.q * kilo_lattice_size;
                     double intermediate_y = intermediate.r * kilo_lattice_size * sqrt(3)/2;
-                    
+                    #else
+// 正确的应该是：
+double intermediate_x = intermediate.q * kilo_lattice_size + intermediate.r * 0.5 * kilo_lattice_size;
+double intermediate_y = intermediate.r * kilo_lattice_size * sqrt(3)/2;
+                    #endif
                     double dx = intermediate_x - mydata->neighbors[j].x;
                     double dy = intermediate_y - mydata->neighbors[j].y;
                     double dist_to_neighbor = sqrt(dx*dx + dy*dy);
@@ -536,7 +507,7 @@ struct Hex find_alternative_path(struct Hex start, struct Hex target) {
         }
 
         // 检查是否被占据且路径畅通
-        if (!is_hex_occupied(intermediate) && !is_collision_imminent(target) &&
+        if (!is_hex_occupied(intermediate) && !is_collision_imminent(intermediate,target) &&
             !is_path_blocked_by_shaped_robots(start, intermediate) &&
             !is_path_blocked_by_shaped_robots(intermediate, target)) {
             printf("找到形状内替代路径 via (%d,%d)\n", intermediate.q, intermediate.r);
@@ -549,93 +520,135 @@ struct Hex find_alternative_path(struct Hex start, struct Hex target) {
     request_shape_robots_to_relocate(start, target);
     return (struct Hex){99,99};
 }
+*/
 
-// 检测附近是否有机器人会碰撞
-
-// 计算点C到直线AB的垂直距离
-float calculate_perpendicular_distance(struct Cartesian A, struct Cartesian B, struct Cartesian C) {
-    // 直线AB的向量
-    float AB_x = B.x - A.x;
-    float AB_y = B.y - A.y;
-    
-    // 向量AC
-    float AC_x = C.x - A.x;
-    float AC_y = C.y - A.y;
-    
-    // 计算叉积的绝对值 |AB × AC|
-    float cross_product = fabs(AB_x * AC_y - AB_y * AC_x);
-    
-    // 直线AB的长度
-    float AB_length = sqrt(AB_x * AB_x + AB_y * AB_y);
-    
-    if (AB_length < 0.001) return INFINITY; // 避免除零
-    
-    // 垂直距离 = |AB × AC| / |AB|
-    return cross_product / AB_length;
-}
-// 计算点C在直线AB上的投影比例
-// 返回值：0=在A点，1=在B点，<0=在A之前，>1=在B之后
-float calculate_projection_ratio(struct Cartesian A, struct Cartesian B, struct Cartesian C) {
-    // 直线AB的向量
-    float AB_x = B.x - A.x;
-    float AB_y = B.y - A.y;
-    
-    // 向量AC
-    float AC_x = C.x - A.x;
-    float AC_y = C.y - A.y;
-    
-    // 直线AB长度的平方
-    float AB_length_sq = AB_x * AB_x + AB_y * AB_y;
-    
-    if (AB_length_sq < 0.001) return 0; // 避免除零
-    
-    // 投影比例 = (AC · AB) / |AB|²
-    float dot_product = AC_x * AB_x + AC_y * AB_y;
-    return dot_product / AB_length_sq;
-}
-
-bool is_any_robot_too_close(void) {
-    for (int i = 0; i < mydata->N_Neighbors; i++) {
-        struct Cartesian neighbor_cart = {mydata->neighbors[i].x, mydata->neighbors[i].y};
-        
-        float dx = neighbor_cart.x - kilo_x;
-        float dy = neighbor_cart.y - kilo_y;
-        float distance = sqrt(dx * dx + dy * dy);
-        
-        if (distance < 40.0) { // 30mm 内认为太近
-            printf("Robot %d: 邻居 %d 太近: %.1fmm\n", 
-                   kilo_uid, mydata->neighbors[i].ID, distance);
-            return true;
-        }
-    }
-    return false;
-}
-
-void debug_collision_detection(struct Hex target_pos) {
-    struct Cartesian target_cart = hex_to_Cart(target_pos);
-    
-    printf("=== 碰撞检测调试 ===\n");
-    printf("我的位置: (%.1f, %.1f)\n", kilo_x, kilo_y);
-    printf("目标位置: (%.1f, %.1f)\n", target_cart.x, target_cart.y);
-    printf("邻居数量: %d\n", mydata->N_Neighbors);
-    
-    for (int i = 0; i < mydata->N_Neighbors; i++) {
-        struct Cartesian neighbor_cart = {mydata->neighbors[i].x, mydata->neighbors[i].y};
-        float dx = neighbor_cart.x - kilo_x;
-        float dy = neighbor_cart.y - kilo_y;
-        float distance = sqrt(dx * dx + dy * dy);
-        
-        printf("邻居 %d: 位置(%.1f,%.1f), 距离=%.1f\n", 
-               mydata->neighbors[i].ID, neighbor_cart.x, neighbor_cart.y, distance);
-    }
-    printf("==================\n");
-}
 /* -------功能：保持阶段---------*/
-void maintainPositionState() {
-    set_move_type(STOP);
-}
+
 
 /* -------功能：寻找阶段---------*/
+struct Hex find_farthest_unoccupied_target() {
+    struct Hex best = {99, 99};
+    double best_dist = 0;  // 改为0，找最大距离
+
+    const int COMM_RANGE = 2;
+    int self_q = mydata->hex_q;
+    int self_r = mydata->hex_r;
+
+    for (int dq = -COMM_RANGE; dq <= COMM_RANGE; dq++) {
+        for (int dr = -COMM_RANGE; dr <= COMM_RANGE; dr++) {
+            int q = self_q + dq;
+            int r = self_r + dr;
+
+            // 跳过超出通信范围的点
+            if (hex_distance(self_q, self_r, q, r) > COMM_RANGE) continue;
+
+            // ===== 开始过滤 =====
+            if(is_collision_imminent((struct Hex){self_q,self_r},(struct Hex){q,r})) continue;
+            if (!is_position_in_shape((struct Hex){q,r})) continue;
+            if (is_occupied[q + 100][r + 100]) continue;
+            if (q == self_q && r == self_r) continue;
+            if (r < self_r) continue;
+
+            if ((q == -3 && r == 4) || (q == -2 && r == 4) || 
+                (q == -2 && r == 3) || (q == -1 && r == 3)) continue;
+
+            if (last_find_from.q == q && last_find_from.r == r) {
+                int have_oucciped_count = count_occupied_positions();
+                printf("已有 %d 个机器人\n",have_oucciped_count);
+                if(have_oucciped_count == 28){
+
+                }else{
+                    continue;
+                }
+            }
+
+            if (!check_target_localizability((struct Hex){self_q, self_r}, (struct Hex){q, r})) {
+                continue;
+            }
+
+            double dist = hex_distance(self_q, self_r, q, r);
+            if (dist > best_dist) {  // 改为找最大距离
+                best_dist = dist;
+                best.q = q;
+                best.r = r;
+            }
+        }
+    }
+
+    printf("Robot %d: 找到最远目标点 (%d, %d), 距离=%.1f\n", kilo_uid, best.q, best.r, best_dist);
+    return best;
+}
+#if 1
+struct Hex find_nearest_unoccupied_target() {
+    struct Hex best = {99, 99};
+    double best_dist = INFINITY;
+
+    const int COMM_RANGE = 3;
+    int self_q = mydata->hex_q;
+    int self_r = mydata->hex_r;
+
+    for (int dq = -COMM_RANGE; dq <= COMM_RANGE; dq++) {
+        for (int dr = -COMM_RANGE; dr <= COMM_RANGE; dr++) {
+            int q = self_q + dq;
+            int r = self_r + dr;
+
+            // 跳过超出通信范围的点
+            if (hex_distance(self_q, self_r, q, r) > COMM_RANGE) continue;
+
+            // 🔽🔽🔽 在这里插入调试打印 🔽🔽🔽
+            #if 0
+            printf("Checking (%d, %d): occupied=%d, r_check=%d, last_from=%d, localizable=%d\n",
+                   q, r,
+                   is_occupied[q + 100][r + 100],           // 是否被占据
+                   r < self_r,                              // 是否 r < self_r（会被跳过）
+                   (last_find_from.q == q && last_find_from.r == r), // 是否是上一次起点
+                   check_target_localizability((struct Hex){self_q, self_r}, (struct Hex){q, r})
+            );
+            #endif
+            // 🔼🔼🔼 调试打印结束 🔼🔼🔼
+
+            // ===== 开始过滤 =====
+            if(is_collision_imminent((struct Hex){self_q,self_r},(struct Hex){q,r})) continue;
+            if (!is_position_in_shape((struct Hex){q,r})) continue;
+            if (is_occupied[q + 100][r + 100]) continue;
+            if (q == self_q && r == self_r) continue;
+            if (r < self_r) continue;
+            if (mydata->original_position.q == q && mydata->original_position.r == r) continue;
+
+            if ((q == -3 && r == 4) || (q == -2 && r == 4) || 
+                (q == -2 && r == 3) || (q == -1 && r == 3)) continue;
+
+            if (is_position_in_history((struct Hex){q,r})){
+                #if 0
+                if(have_oucciped_count>27){
+                    printf("累计数量：%d\n",have_oucciped_count);
+                }else{
+                    continue;
+                }
+                #endif 
+                continue;
+            } 
+            //if (last_find_from.q == q && last_find_from.r == r) continue;
+
+            if (!check_target_localizability((struct Hex){self_q, self_r}, (struct Hex){q, r})) {
+                continue;
+            }
+
+            double dist = hex_distance(self_q, self_r, q, r);
+            if (dist < best_dist) {
+                best_dist = dist;
+                best.q = q;
+                best.r = r;
+            }
+        }
+    }
+
+
+
+    printf("Robot %d: 找到目标点 (%d, %d), 距离=%.1f\n", kilo_uid, best.q, best.r, best_dist);
+    return best;
+}
+#else
 struct Hex find_nearest_unoccupied_target() {
     struct Hex best = {99, 99};
     double best_dist = INFINITY;
@@ -670,10 +683,14 @@ struct Hex find_nearest_unoccupied_target() {
     printf("Robot %d: 找到目标点 (%d, %d), 距离=%.1f\n", kilo_uid, best.q, best.r, best_dist);
     return best;
 }
+#endif
 
 int find_optimal_shape_position_index() {
+    #if 0
+    struct Hex nearest = find_farthest_unoccupied_target();
+    #else
     struct Hex nearest = find_nearest_unoccupied_target();
-    
+    #endif
     // 找到对应的索引
     for (int i = 0; i < mydata->lattice_shape_size; i++) {
         if (mydata->lattice_shape[i].q == nearest.q && 
@@ -684,130 +701,26 @@ int find_optimal_shape_position_index() {
         }
     }
     
-    printf("Robot %d: ERROR - 无法找到索引 (%d,%d)\n", 
-           kilo_uid, nearest.q, nearest.r);
+    //printf("Robot %d: ERROR - 无法找到索引 (%d,%d)\n", kilo_uid, nearest.q, nearest.r);
     return -1;
 }
-
-// 检查机器人是否能移动
-bool can_robot_move(struct Hex robot_pos) {
-    struct Hex directions[6] = {{1,0}, {1,-1}, {0,-1}, {-1,0}, {-1,1}, {0,1}};
-
-    
-    for (int i = 0; i < 6; i++) {
-        struct Hex target = {
-            robot_pos.q + directions[i].q,
-            robot_pos.r + directions[i].r
-        };
-
-        if(target.q == last_find_from.q && target.r == last_find_from.r){
-            continue;
-        }
-
-        if(target.r < robot_pos.r){
-            continue;
-        }
-        // 只要在形状内且为空就可以移动
-        if (is_robot_in_shape(target.q, target.r) && 
-            is_position_empty(target.q, target.r)) {
-            return true;
-        }
-    }
-    
-    return false;
-}
-
-bool was_recently_relocated(struct Hex pos) {
-    for (int i = 0; i < relocation_history_count; i++) {
-        if (last_relocation_robots[i].q == pos.q && 
-            last_relocation_robots[i].r == pos.r) {
-            return true;
-        }
-    }
-    return false;
-}
-
-void add_to_relocation_history(struct Hex pos) {
-    // 滚动记录
-    if (relocation_history_count >= 2) {
-        for (int i = 0; i < 1; i++) {
-            last_relocation_robots[i] = last_relocation_robots[i+1];
-        }
-        relocation_history_count = 1;
-    }
-    last_relocation_robots[relocation_history_count++] = pos;
-}
-#if 0
-void initiate_simple_relocation(void) {
-    printf("=== 启动简单让位 ===\n");
-    
-    struct Hex candidates[50];
-    int candidate_count = 0;
-    
-    // 收集所有候选机器人
-    for (int i = 0; i < mydata->lattice_shape_size; i++) {
-        struct Hex pos = mydata->lattice_shape[i];
-        
-        if (is_occupied[pos.q + 100][pos.r + 100] &&
-            can_robot_move(pos)) {
-            
-            candidates[candidate_count++] = pos;
-        }
-    }
-    
-    if (candidate_count == 0) {
-        printf("❌ 没有找到可以移动的机器人\n");
-        return;
-    }
-    
-    // 随机选择一个，打破振荡模式
-    int random_index = rand() % candidate_count;
-    struct Hex selected = candidates[random_index];
-    
-    printf("随机选择机器人 %d at (%d,%d) 进行让位\n", 
-           get_robot_id_at(selected.q, selected.r), selected.q, selected.r);
-    set_global_relocation_request(selected, (struct Hex){0,0});
-}
-#else 
-void initiate_simple_relocation(void) {
-    printf("=== 启动简单让位 ===\n");
-    
-    // 遍历所有形状位置，找到第一个可以移动的机器人
-    for (int i = 0; i < mydata->lattice_shape_size; i++) {
-        struct Hex pos = mydata->lattice_shape[i];
-        printf("正在遍历机器人 位置（%d，%d）\n",  pos.q, pos.r);
-        
-        // 如果这个位置被占用且不是机器人0
-        if (is_occupied[pos.q + 100][pos.r + 100]) { 
-
-            // 检查这个机器人是否能移动
-            if (can_robot_move(pos)) {
-                if (!was_recently_relocated(pos)){
-                printf("选择机器人 %d at (%d,%d) 进行让位\n", get_robot_id_at(pos.q, pos.r), pos.q, pos.r);
-                add_to_relocation_history(pos);
-                set_global_relocation_request(pos,(struct Hex){0,0});
-                return;}
-            }
-        }
-
-        if(pos.q == 0 || pos.r == 3){
-            printf("%d 占有\n",is_occupied[pos.q + 100][pos.r + 100]);
-        }
-    }
-    
-    printf("❌ 没有找到可以移动的机器人\n");
-}
-#endif
 
 // 寻找形状位置状态
 void findShapePositionState() {
 
-    set_global_vacancy(mydata->hex_q,mydata->hex_r);
+    if(!is_position_in_shape((struct Hex){mydata->hex_q,mydata->hex_r})){
+        set_global_vacancy(mydata->hex_q,mydata->hex_r);
+    }
     
     int best_index = find_optimal_shape_position_index();
-    printf("Robot %d: found best shape index = %d\n", kilo_uid, best_index);
+    //printf("Robot %d: found best shape index = %d\n", kilo_uid, best_index);
     
     if (best_index != -1) {
+
+        if(is_position_in_shape((struct Hex){mydata->hex_q,mydata->hex_r})){
+            have_oucciped_count--;
+        }
+
         mydata->target_shape_index = best_index;
         mydata->target_q = mydata->lattice_shape[best_index].q;
         mydata->target_r = mydata->lattice_shape[best_index].r;
@@ -816,15 +729,7 @@ void findShapePositionState() {
         last_find_to.q = mydata->target_q; 
         last_find_to.r = mydata->target_r; 
         
-        /*
-        struct Cartesian target_cart = hex_to_Cart(mydata->lattice_shape[best_index]);
-        mydata->target_cart_x = target_cart.x;
-        mydata->target_cart_y = target_cart.y;
-        
-        printf("Robot %d: moving to shape position (%d, %d) -> cartesian (%.1f, %.1f)\n", 
-               kilo_uid, mydata->target_hex_q, mydata->target_hex_r, 
-               mydata->target_cart_x, mydata->target_cart_y);
-        */ 
+ 
         shape_entry_in_progress = 1;
         current_shape_entry_robot = kilo_uid;
         last_shape_entry_tick = kilo_ticks;
@@ -832,27 +737,17 @@ void findShapePositionState() {
         relocation_chain_complete = 0;
         printf("=== 新一轮形状进入开始 ===\n"); 
         printf("%d\n",kilo_uid);
-        num_rangwei =  0;   
         
         set_bot_state(MOVE_TO_SHAPE);
     } else {
-        // 找不到开始让位
-        if(num_rangwei >500){
+
+            clear_global_vacancy();
+            set_bot_state(IDLE);
+            printf("Robot %d: 没找到合适的，下一个找位置\n", kilo_uid);
             should_move_to_shape = true;
-            clear_global_vacancy();
-            set_bot_state(IDLE);
-            printf("Robot %d: 超过次数，新的进入\n", kilo_uid);
             set_move_type(STOP);
             omni_stop();
-        }else{
-            num_rangwei++;
-            initiate_simple_relocation();
-            clear_global_vacancy();
-            set_bot_state(IDLE);
-            printf("Robot %d: 没找到合适的，开始让位\n", kilo_uid);
-            set_move_type(STOP);
-            omni_stop();
-        }
+        
     }
 }
 
@@ -866,39 +761,11 @@ void moveToShapeState() {
     move_attempts++;
     
     //printf("Robot %d: === MOVE_TO_SHAPE (attempt %d) ===\n", kilo_uid, move_attempts);
-    
-    // debug_collision_detection(current_target);
+
 
     current_target.q = mydata->target_q;
     current_target.r = mydata->target_r;
     
-    struct Hex current_hex = cart_to_hex((struct Cartesian){kilo_x,kilo_y});
-    
-    //printf("Robot %d: 从当前的 (%d,%d)(%.1f,%.1f) 移动到 (%d,%d)\n", kilo_uid, current_hex.q, current_hex.r,kilo_x, kilo_y, mydata->target_q, mydata->target_r);
-#if 1
-
-    if (is_collision_imminent(current_target)) {
-        //printf("Robot %d: 路径被阻挡，寻找替代路径\n", kilo_uid);
-        current_target = find_alternative_path(current_hex, current_target);
-    }
-
-    if (!is_position_in_shape(current_target)){
-        // 不在形状内
-        printf("不在形状内\n");
-        request_shape_robots_to_relocate((struct Hex){mydata->hex_q,mydata->hex_r}, (struct Hex){mydata->target_q,mydata->target_r});
-        return;
-    }
-    //printf("当前点机器人 %d 当前点为(%d,%d) 当前目标点 (%d,%d), 最终目标点(%d,%d)\n", kilo_uid,mydata->hex_q,mydata->hex_r,current_target.q, current_target.r,mydata->target_q,mydata->target_r);
-
-    if(global_relocation_request.q != 99 && global_relocation_request.r != 99){// || (current_target.q == 99 && current_target.r == 99)){
-        // 这里进行下一轮找位置
-        set_bot_state(IDLE);
-        printf("返回\n");
-        return;
-    }
-
-
-#endif
     int result = omni_move_to_lattice(&current_target);
     if(result){
         if (current_target.q != mydata->target_q || current_target.r != mydata->target_r) {
@@ -915,17 +782,9 @@ void moveToShapeState() {
             mydata->hex_r = cur_hex.r;
             printf("Robot %d: 到达中间点，继续向最终目标移动\n", kilo_uid);
         }else{
-            /*
-            struct Hex final_alogrithm_hex = my_nearest_lattice();
+            have_oucciped_count++;
+            record_move(current_target);
 
-            printf("Robot %d: FINAL POSITION: (%d,%d)\n", kilo_uid, final_alogrithm_hex.q, final_alogrithm_hex.r);
-            
-            if (final_alogrithm_hex.q == target_hex.q && final_alogrithm_hex.r == target_hex.r && final_alogrithm_hex.q == current_hex.q && final_alogrithm_hex.r == current_hex.r) {
-                printf("最终确定 %d: ✅到达\n", kilo_uid);
-            } else {
-                printf("Robot %d: ❌ FAILED - Wrong final position!\n", kilo_uid);
-            }
-            */
             if(mydata->original_position.q >= -100 && mydata->original_position.q<= 100
             && mydata->original_position.r >= -100 && mydata->original_position.r<= 100){
                 is_occupied[mydata->original_position.q + 100][mydata->original_position.r + 100] = 0;
@@ -945,19 +804,20 @@ void moveToShapeState() {
             printf("Robot %d: 已经到达位置 (%d.%d), 下一步补位\n",kilo_uid,mydata->hex_q,mydata->hex_r);
             update_occupancy(mydata->target_shape_index, 1);
             mydata->shape_position_occupied = 1;
-            
+
             shape_entry_in_progress = 0;
             occupied++;
 
-
-            confirm_global_vacancy();
-            set_bot_state(MAINTAIN_POSITION);
+            if(global_vacancy.q != 99 && global_vacancy.r != 99){
+                confirm_global_vacancy();
+            }
+            set_bot_state(IDLE);
         }
     }
     if(check_localizablitiy()){
-            printf("可以定位\n");
+            //printf("可以定位\n");
         }else{
-            printf("不可以定位\n");
+            printf("机器人 %d移动 不可以定位\n", kilo_uid);
         }
     global_localization();
 }
@@ -965,14 +825,15 @@ void moveToShapeState() {
 /* ----------功能：补位-----------*/
 
 // 检查链式补位机会，实际上形状内的也需要补位。
-#if 0
 void checkChainRelocationOpportunity(void) {
     //if (!mydata->formation_initialized) return;
     // 只有形状外的机器人才参与链式补位
+    #if 1
     if (mydata->shape_position_occupied) 
     {
         return; // 已经在形状内，不参与补位
     }
+    #endif
 
     if(get_bot_state() == CHAIN_RELOCATION || get_bot_state() == FIND_SHAPE_POSITION
     || get_bot_state() == MOVE_TO_SHAPE || get_bot_state() == MAINTAIN_POSITION) 
@@ -981,6 +842,7 @@ void checkChainRelocationOpportunity(void) {
     }
     
     // 确保不会回头
+
     if(mydata->original_position.q == global_vacancy.q 
         && mydata->original_position.r == global_vacancy.r)
     {
@@ -1015,113 +877,17 @@ void checkChainRelocationOpportunity(void) {
     }
 
     struct Hex my_hex = {mydata->hex_q, mydata->hex_r};
-
-    if(is_collision_imminent(global_vacancy)){
+/*
+    if(is_collision_imminent(my_hex,global_vacancy)){
         return;
     }
+*/
+    if(is_position_in_shape(global_vacancy)){
+        if(!check_target_localizability((struct Hex){my_hex.q,my_hex.r},(struct Hex){global_vacancy.q,global_vacancy.r})) 
+            return;
+    }else{
 
-    // 不相邻就不补位
-    if (!is_hex_adjacent(my_hex, global_vacancy)) {   
-        return; // 不相邻，不参与补位
     }
-
-    if(!check_target_localizability((struct Hex){my_hex.q,my_hex.r},(struct Hex){global_vacancy.q,global_vacancy.r})) continue;
-     /* 
-    // 与形状距离为1 不补位
-    struct Hex target = find_nearest_unoccupied_target();
-    if (is_hex_adjacent(my_hex, target)) {
-        printf("该点与形状距离为1不补位\n");
-        return; // 相邻，不参与补位
-    }
-    */
-
-
-
-#if 0
-    if( my_hex.q == global_vacancy.q){
-#else
-    if(my_hex.r == global_vacancy.r){
-#endif
-
-      return;
-    }
-
-
-
-
-    relocation_chain_complete = 0;
-    // 符合条件，该点需要去补位
-    last_relocation_from.q = mydata->hex_q;
-    last_relocation_from.r = mydata->hex_r;
-    last_relocation_to.q = global_vacancy.q;
-    last_relocation_to.r = global_vacancy.r;
-    printf("在 检查补位中，补位机器人 %d： （%d,%d）全局空位（%d，%d）\n", kilo_uid, mydata->hex_q,mydata->hex_r,global_vacancy.q,global_vacancy.r);
-    mydata->original_position.q = mydata->hex_q;
-    mydata->original_position.r = mydata->hex_r;
-
-    any_robot_relocating = 1;
-    relocating_robot_id = kilo_uid;
-
-    set_bot_state(CHAIN_RELOCATION);
-    should_move_to_shape = false;
- 
-}
-#else
-void checkChainRelocationOpportunity(void) {
-    //if (!mydata->formation_initialized) return;
-    // 只有形状外的机器人才参与链式补位
-    if (mydata->shape_position_occupied) 
-    {
-        return; // 已经在形状内，不参与补位
-    }
-
-    if(get_bot_state() == CHAIN_RELOCATION || get_bot_state() == FIND_SHAPE_POSITION
-    || get_bot_state() == MOVE_TO_SHAPE || get_bot_state() == MAINTAIN_POSITION) 
-    {
-        return;
-    }
-    
-    // 确保不会回头
-    if(mydata->original_position.q == global_vacancy.q 
-        && mydata->original_position.r == global_vacancy.r)
-    {
-        return;
-    }
-
-#if 1
-    // 不会往下走
-    if(mydata->hex_r > global_vacancy.r){
-        return;
-    }
-#endif
-
-    // 确保不会振荡
-    if(last_relocation_from.q == global_vacancy.q 
-        && last_relocation_from.r == global_vacancy.r && mydata->original_position.q == last_relocation_to.q && mydata->original_position.r == last_relocation_to.r) 
-    {
-
-        return;
-    }
-
-    // 空位不存在
-    if (!vacancy_exists)
-    {
-        return;
-    } 
-
-    // 补位完成
-    if (relocation_chain_complete)
-    {
-        return;
-    }
-
-    struct Hex my_hex = {mydata->hex_q, mydata->hex_r};
-
-    if(is_collision_imminent(global_vacancy)){
-        return;
-    }
-
-    if(!check_target_localizability((struct Hex){my_hex.q,my_hex.r},(struct Hex){global_vacancy.q,global_vacancy.r})) return;
 
     // 不相邻就不补位
     #if 1
@@ -1129,9 +895,6 @@ void checkChainRelocationOpportunity(void) {
         return; // 不相邻，不参与补位
     }
 #endif
-    // ✅ 新增条件：检查补位目标点是否在邻居通信范围内
-    
-        // 检查补位目标点是否在至少三个邻居的通信范围内
 
     
 
@@ -1145,7 +908,7 @@ void checkChainRelocationOpportunity(void) {
     */
 
 
-#if 1
+#if 0
 #if 0
     if( my_hex.q == global_vacancy.q){
 #else
@@ -1172,18 +935,17 @@ void checkChainRelocationOpportunity(void) {
     relocating_robot_id = kilo_uid;
 
     set_bot_state(CHAIN_RELOCATION);
+    mydata->relocation_start_time = kilo_ticks;
     should_move_to_shape = false;
  
 }
-#endif
+
 
 // 链式补位状态
 void chainRelocationState() {
-    //printf("机器人 %d 还在补位 原位置（%d，%d）\n", kilo_uid,mydata->o_original_position.q,mydata->o_original_position.r);
+    //printf("机器人 %d 还在补位 原位置（%d，%d）\n", kilo_uid,mydata->original_position.q,mydata->original_position.r);
     struct Hex target_hex = (struct Hex){global_vacancy.q,global_vacancy.r};
-    if(kilo_uid == 28){
-        printf(" 机器人28正在补位\n");
-    }
+
     if(target_hex.q == first_relocation.q && target_hex.r == first_relocation.r){
         first_relocation.q = 99;
         first_relocation.r = 99;
@@ -1212,23 +974,20 @@ void chainRelocationState() {
             is_occupied[mydata->original_position.q+100][mydata->original_position.r+100] = 0;
         }
 
-        /*
-        struct Hex point_in_Hex = my_nearest_lattice();
-        mydata->hex_q = point_in_Hex.q;
-        mydata->hex_r = point_in_Hex.r;
-        */
+        struct Hex cur_hex = {99,99};
+        if(is_position_in_shape(global_vacancy)){
+            global_localization();
+            cur_hex = cart_to_hex((struct Cartesian){mydata->x, mydata->y});
+            mydata->hex_q = cur_hex.q;
+            mydata->hex_r = cur_hex.r;
+        }else{
+            cur_hex = cart_to_hex((struct Cartesian){kilo_x, kilo_y});
+            mydata->x = kilo_x;
+            mydata->y = kilo_y;
+            mydata->hex_q = cur_hex.q;
+            mydata->hex_r = cur_hex.r;
+        }
 
-        // 去掉更新坐标
-        /*
-        struct Hex cur_hex = cart_to_hex((struct Cartesian){kilo_x, kilo_y});
-        mydata->hex_q = cur_hex.q;
-        mydata->hex_r = cur_hex.r;
-        mydata->localized = 0;
-        */
-        global_localization();
-        struct Hex cur_hex = cart_to_hex((struct Cartesian){mydata->x, mydata->y});
-        mydata->hex_q = cur_hex.q;
-        mydata->hex_r = cur_hex.r;
         if(relocation_chance == 0){
             first_relocation.q = mydata->hex_q;
             first_relocation.r = mydata->hex_r;
@@ -1256,68 +1015,28 @@ void chainRelocationState() {
         //checkChainRelocationOpportunity();
         // 🔧 任何补位完成的机器人都更新活动时间
         last_relocation_activity = kilo_ticks;
-        printf("Robot %d 补位完成，更新补位活动时间 %d\n", kilo_uid,last_relocation_activity);
+        //printf("Robot %d 补位完成，更新补位活动时间 %d\n", kilo_uid,last_relocation_activity);
     }else{
-        if(check_localizablitiy()){
-            printf("可以定位\n");
+        //printf("没有移动到\n");
+        struct Hex cur_hex = {99,99};
+        if(is_position_in_shape(global_vacancy)){
+            global_localization();
+
         }else{
-            printf("不可以定位\n");
+            //printf("更新位置\n");
+            cur_hex = cart_to_hex((struct Cartesian){kilo_x, kilo_y});
+            mydata->x = kilo_x;
+            mydata->y = kilo_y;
+            
+            
         }
-        global_localization();
+        mydata->total_relocation_time = kilo_ticks - mydata->relocation_start_time;
         last_relocation_activity = kilo_ticks;
-    }
-}
-
-
-bool is_relocation_requested_for_me(void) {
-    if (!relocation_request_active) return false;
-    
-    struct Hex my_hex = {mydata->hex_q, mydata->hex_r};
-    return (my_hex.q == global_relocation_request.q && 
-            my_hex.r == global_relocation_request.r);
-}
-
-void check_relocation_request(void) {
-    // 检查是否有让位请求针对自己
-    if (is_relocation_requested_for_me()) {
-        printf("Robot %d: 收到让位请求，寻找新位置\n", kilo_uid);
-        
-        // 寻找可移动的空闲形状位置
-        struct Hex new_position = find_nearest_unoccupied_target();
-        
-        if (new_position.q != 99 && new_position.r != 99) {
-            printf("Robot %d: 让位到新位置 (%d,%d)\n", kilo_uid, new_position.q, new_position.r);
-            
-            // 释放当前位置
-            update_occupancy_for_hex((struct Hex){mydata->hex_q, mydata->hex_r}, 0);
-            
-            // 移动到新位置
-            mydata->target_q = new_position.q;
-            mydata->target_r = new_position.r;
-            
-            // 找到对应的形状索引
-            for (int i = 0; i < mydata->lattice_shape_size; i++) {
-                if (mydata->lattice_shape[i].q == new_position.q && 
-                    mydata->lattice_shape[i].r == new_position.r) {
-                    mydata->target_shape_index = i;
-                    break;
-                }
-            }
-            
-            set_bot_state(MOVE_TO_SHAPE);
-        } else {
-            printf("Robot %d: 无法让位，没有可用位置\n", kilo_uid);
-        }
     }
 }
 
 /* ------- 补位检测 ------  */
 void check_relocation_chain_completion(void) {
-    if(kilo_ticks / 100 == 0){
-        //printf("进行补位检测\n");
-    }
-    // 只有Robot 0负责检测全局进度
-    //if (kilo_uid != 0) return;
 
     if (get_bot_state() == CHAIN_RELOCATION 
         || get_bot_state() == FIND_SHAPE_POSITION
@@ -1345,11 +1064,12 @@ void check_relocation_chain_completion(void) {
     }
     
     // 条件2: 一段时间内没有补位活动
-    if (kilo_ticks - last_relocation_activity > 1000) {
+    if (kilo_ticks - last_relocation_activity > 1000 || mydata->total_relocation_time > 1000) {
         //printf("=== 补位链已完成，切换到下一轮形状进入 ===\n");
         first_relocation.q = 99;
         first_relocation.r = 99;
         // 重置状态，开始新一轮
+        mydata->total_relocation_time = 0;
         relocation_chain_complete = 1;
         shape_entry_in_progress = 0;
         current_shape_entry_robot = 0;

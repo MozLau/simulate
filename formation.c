@@ -493,7 +493,7 @@ void setup()
 #endif
 
     mydata->path_point_index = 0;
-
+    init_move_history();
     
     setup_message();
 }
@@ -774,50 +774,33 @@ void loop()
     set_color(colorNum[kilo_uid % 9 + 1]);
 
 
-    // ///////////////////id= 0, 1, 2, 3 join the shape at the beginning/////////////////
-    // if(kilo_uid == 0 || kilo_uid == 1 || kilo_uid == 2 || kilo_uid== 3|| kilo_uid== 4)
-    // {
-    //     set_move_type(STOP);
-    //     set_bot_state(STOP_OUT);
-    //     set_bot_type(BASE);
-    //     set_motors(0,0);
-    //     mydata->x = kilo_x;
-    //     mydata->y = kilo_y;
-    //     mydata->x_16 = (uint16_t)((kilo_x + x_range) / (2 * x_range) * 65535);
-    //     mydata->y_16 = (uint16_t)((kilo_y + y_range) / (2 * y_range) * 65535);
-    // }
-
-
-    //////////////////State machine///////////////////
-
-    // 检查需要重新找位置的是不是自己，是的话直接去找位置了。
-    if(global_relocation_request.q !=99 && global_relocation_request.r !=99
-         && global_relocation_request.q == mydata->hex_q && global_relocation_request.r == mydata->hex_r){
-        printf("检测到当前机器人 %d 应该重新找位置 \n", kilo_uid);
-        set_bot_state(FIND_SHAPE_POSITION);
-        global_relocation_request.q = 99;
-        global_relocation_request.r = 99;
-    }else{
-        if(!any_robot_relocating){
-            // 检查链式补位机会
-            checkChainRelocationOpportunity();
-        }
-    }
-    
+       
+    if(!any_robot_relocating){
+        // 检查链式补位机会
+        checkChainRelocationOpportunity();
+    } 
+        
     if(any_robot_relocating && relocating_robot_id == kilo_uid){
         chainRelocationState();
     }else{
         switch(get_bot_state()) {
         case IDLE: 
             // 已经占据，是否需要让位
-            if(mydata->shape_position_occupied){
-                check_relocation_request();
-                return;
-            }//else if(mydata->relocation_occupied){} // 忘了
-            else if (should_move_to_shape) {    // 找位置阶段
+            if (should_move_to_shape) {    // 找位置阶段
                 printf("Robot %d: 🎯 Starting to find shape position\n", kilo_uid);
+                #if 0
+                if(is_bot_state_with_cooldown()){
+                    printf("冷却时间：%d\n", kilo_ticks);
+                   
+                }else{
+                    printf("设置时间：%d\n", kilo_ticks);
+                    set_bot_state(FIND_SHAPE_POSITION);
+                    should_move_to_shape = false;
+                }
+                #else
                 set_bot_state(FIND_SHAPE_POSITION);
                 should_move_to_shape = false;
+                #endif
             }
 
             break;
@@ -842,15 +825,11 @@ void loop()
         case CHAIN_RELOCATION:
             chainRelocationState();
             break;
-        case MAINTAIN_POSITION:
-            maintainPositionState();
-            break;
-    
         }
     }
 
     //if the robot is not localizable
-    if(mydata->localizable == 0) omni_stop();
+    //if(mydata->localizable == 0) omni_stop();
   
     //send message
     setup_message();

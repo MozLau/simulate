@@ -184,6 +184,12 @@ typedef struct {
     distance_measurement_t dist;
 } received_message_t;
 
+typedef struct {
+    struct Hex move_history[5];
+    int history_index;
+    bool history_initialized;
+} MoveHistoryTracker;
+
 typedef struct
 {
     Neighbor_t neighbors[MAXN];
@@ -343,10 +349,13 @@ typedef struct
     uint8_t *shape_occupancy;           // 形状位置占用状态数组
     uint8_t shape_position_occupied;    // 是否占据形状
     uint8_t relocation_occupied;        // 是否已经补位
-    struct Hex ex_position;   // 上一位置
     struct Hex o_original_position;
     struct Hex original_position;
     uint8_t target_shape_index;
+    MoveHistoryTracker move_tracker;
+    uint32_t relocation_start_time;  // 开始补位的时间戳
+    uint32_t total_relocation_time;  // 累计补位时间
+
 #endif
     
     
