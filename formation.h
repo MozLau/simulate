@@ -62,9 +62,8 @@ enum BOTSTATE {
     // 新增状态
     FIND_SHAPE_POSITION,    // 寻找形状位置
     MOVE_TO_SHAPE,          // 向形状移动
-    MAINTAIN_POSITION,       // 维持形状位置    
+    PLAN_MOVEMENT,  
     CHAIN_RELOCATION,       // 链式补位
-    MAINTAIN_RELOCATION_POSITION
 };
 #endif
 enum FAULTTYPE {NIL, FOUT, FIN, FSUB};
@@ -387,6 +386,7 @@ typedef struct
     uint8_t has_relocation_intent;      // 是否有补位意图
     struct Hex relocation_target;       // 补位目标位置
     struct Hex relocation_source;       // 补位来源位置
+    uint32_t intent_backoff_until;
 
 #endif
 

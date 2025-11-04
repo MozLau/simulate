@@ -18,22 +18,22 @@
       "ID": 2,
       "direction": 0.0,
       "state": {},
-      "x_position": -52.980704258490832,
-      "y_position": -0.21540245081296186
+      "x_position": -51.0,
+      "y_position": 0.0
     },
     {
       "ID": 3,
       "direction": 0.0,
       "state": {},
-      "x_position": 20.140794811741994,
-      "y_position": -130.9014165280802
+      "x_position": 0.0,
+      "y_position": 0.0
     },
     {
       "ID": 4,
       "direction": 0.0,
       "state": {},
-      "x_position": 52.977172626899211,
-      "y_position": -0.26850200111797906
+      "x_position": 51.0,
+      "y_position": 0.0
     },
     {
       "ID": 5,
@@ -65,17 +65,17 @@
     },
     {
       "ID": 9,
-      "direction": 2.6248974800109863,
+      "direction": 0.0,
       "state": {},
-      "x_position": 105.84702335245916,
-      "y_position": -351.30875524486981
+      "x_position": -25.0,
+      "y_position": 44.0
     },
     {
       "ID": 10,
-      "direction": 3.6582877635955811,
+      "direction": 0.0,
       "state": {},
-      "x_position": -125.98425832629891,
-      "y_position": -316.6732696107116
+      "x_position": 25.0,
+      "y_position": 44.0
     },
     {
       "ID": 11,
@@ -204,5 +204,5 @@
       "y_position": 176.0
     }
   ],
-  "ticks": 2325
+  "ticks": 155
 }

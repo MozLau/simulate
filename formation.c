@@ -259,6 +259,12 @@ void purgeNeighbors(void)
             mydata->neighbors[i] = mydata->neighbors[mydata->N_Neighbors-1];
             //replace it by the last entry
             mydata->N_Neighbors--;
+            mydata->neighbors[i].timestamp = 0;
+            mydata->neighbors[i].is_moving = 0;
+            mydata->neighbors[i].has_movement_intent = 0;
+            mydata->neighbors[i].known_vacancy = (struct Hex){99,99};
+            mydata->neighbors[i].vacancy_timestamp = 0;
+            mydata->neighbors[i].target_intent_time = 0;
         }
 }
 
@@ -507,12 +513,13 @@ void setup()
            &mydata->lattice_t, &mydata->lattice_t_size,
             &mydata->recycleFlagSeq);
 
-    printf("\nSequence size %d:\n", mydata->lattice_s_size);
+    //printf("\nSequence size %d:\n", mydata->lattice_s_size);
     int a = (int)mydata->lattice_s_size * 0.5;
-    for (int i = 0; i < mydata->lattice_s_size; i++) {
+    #if 0
+    for (int i = 0; i < mydata->lattice_s_size; i++) { 
         printf("Hex %d: (q: %d, r: %d) (q: %d, r: %d) %d\n", i, mydata->lattice_s[i].q, mydata->lattice_s[i].r, mydata->lattice_t[i].q, mydata->lattice_t[i].r, mydata->recycleFlagSeq[i]);
     }
-
+#endif
 #if 1
  // 初始化当前机器人的六边形坐标
             mydata->hex_q = cur_hex.q;
@@ -527,15 +534,11 @@ void setup()
         int q = mydata->lattice_shape[i].q;
         int r = mydata->lattice_shape[i].r;
         
-        // 检查 is_occupied 数组边界，避免越界
-        if (q >= -100 && q <= 100 && r >= -100 && r <= 100) {
-            is_occupied[q + 100][r + 100] = 0;
-            // printf("Robot %d: initialized is_occupied[%d][%d] for position (%d,%d)\n", kilo_uid, q + 100, r + 100, q, r);
-        }
     }
 #endif
 
     // 初始化移动协调字段
+    mydata->known_vacancy = (struct Hex){99, 99};
     mydata->is_moving = 0;
     mydata->has_movement_intent = 0;
     mydata->intended_target = (struct Hex){99, 99};
@@ -544,6 +547,7 @@ void setup()
     mydata->movement_start_time = 0;
     mydata->can_move = 0;
     mydata->last_movement_check = 0;
+    mydata->intent_backoff_until = 0;
 
     mydata->path_point_index = 0;
     init_move_history();
@@ -831,35 +835,38 @@ void loop()
         
     
     switch(get_bot_state()) {
-    case IDLE: 
-        if (can_safely_start_movement()) {    // 找位置阶段
-            printf("Robot %d: 🎯 Starting to find shape position\n", kilo_uid);
-            set_bot_state(FIND_SHAPE_POSITION);
+        case IDLE: 
+            if (can_start_finding_enhanced()){
+                set_bot_state(FIND_SHAPE_POSITION);
 
-        }
+                //printf("Robot %d: 🎯 Starting to find shape position\n", kilo_uid);
+            }
 
-        break;
-    case MOVE_OUT: 
-        //moveOutState(); 
-        break;
-    case MOVE_IN:
-        // 原有逻辑
-        break;
-    case STOP_IN:
-        // 原有逻辑  
-        break;
-    // ... 其他原有状态
-    
-    // 新增状态
-    case FIND_SHAPE_POSITION:
-        findShapePositionState_distributed();
-        break;
-    case MOVE_TO_SHAPE:
-        moveToShapeState_distributed();
-        break;
-    case CHAIN_RELOCATION:
-        chainRelocationState_distributed();
-        break;
+            break;
+        case MOVE_OUT: 
+            //moveOutState(); 
+            break;
+        case MOVE_IN:
+            // 原有逻辑
+            break;
+        case STOP_IN:
+            // 原有逻辑  
+            break;
+        // ... 其他原有状态
+        
+        // 新增状态
+        case FIND_SHAPE_POSITION:
+            findShapePositionState_distributed();
+            break;
+        case PLAN_MOVEMENT:
+            planMovementState_distributed();
+            break;
+        case MOVE_TO_SHAPE:
+            moveToShapeState_distributed();
+            break;
+        case CHAIN_RELOCATION:
+            chainRelocationState_distributed();
+            break;
     }
     
 
