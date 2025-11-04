@@ -782,7 +782,8 @@ void loop()
         
     if(any_robot_relocating && relocating_robot_id == kilo_uid){
         chainRelocationState();
-    }else{
+    }
+    else{
         switch(get_bot_state()) {
         case IDLE: 
             // 已经占据，是否需要让位
@@ -800,6 +801,7 @@ void loop()
                 #else
                 set_bot_state(FIND_SHAPE_POSITION);
                 should_move_to_shape = false;
+                printf("这里设-\n");
                 #endif
             }
 

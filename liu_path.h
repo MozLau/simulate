@@ -579,13 +579,53 @@ struct Hex find_farthest_unoccupied_target() {
     return best;
 }
 #if 1
+
+int calculate_move_score(int from_q, int from_r, int to_q, int to_r, int fail_count) {
+    int score = 100;
+    double dist = hex_distance(from_q, from_r, to_q, to_r);
+    
+    // 基础：距离越近分数越高
+    score -= (int)(dist * 10);
+    
+    // ✅ 方向偏好（不允许向下移动）
+    if (to_r > from_r) {
+        // 向上移动：最高优先级
+        score += 30;
+        
+        if (to_q == from_q) {
+            // 纯向上：额外奖励
+            score += 15;
+        } else if (abs(to_q - from_q) == 1) {
+            // 斜向移动：较好
+            score += 10;
+        }
+    } else if (to_r == from_r) {
+        // 水平移动：失败时才考虑
+        if (fail_count >= 58) {
+            score += 5;  // 失败时轻微奖励水平移动
+        } else {
+            score -= 10; // 正常时惩罚水平移动
+        }
+    }
+    // 向下移动：完全禁止，不会进入这里
+    
+    // ✅ 随机扰动打破对称性
+    score += (rand() % 6);
+    
+    return score;
+}
+
 struct Hex find_nearest_unoccupied_target() {
     struct Hex best = {99, 99};
     double best_dist = INFINITY;
+    int best_score = -1000;
 
     const int COMM_RANGE = 3;
     int self_q = mydata->hex_q;
     int self_r = mydata->hex_r;
+
+    // ✅ 卡住检测：基于是否找到目标
+    static int consecutive_failures = 0;
 
     for (int dq = -COMM_RANGE; dq <= COMM_RANGE; dq++) {
         for (int dr = -COMM_RANGE; dr <= COMM_RANGE; dr++) {
@@ -595,57 +635,64 @@ struct Hex find_nearest_unoccupied_target() {
             // 跳过超出通信范围的点
             if (hex_distance(self_q, self_r, q, r) > COMM_RANGE) continue;
 
-            // 🔽🔽🔽 在这里插入调试打印 🔽🔽🔽
-            #if 0
-            printf("Checking (%d, %d): occupied=%d, r_check=%d, last_from=%d, localizable=%d\n",
-                   q, r,
-                   is_occupied[q + 100][r + 100],           // 是否被占据
-                   r < self_r,                              // 是否 r < self_r（会被跳过）
-                   (last_find_from.q == q && last_find_from.r == r), // 是否是上一次起点
-                   check_target_localizability((struct Hex){self_q, self_r}, (struct Hex){q, r})
-            );
-            #endif
-            // 🔼🔼🔼 调试打印结束 🔼🔼🔼
-
             // ===== 开始过滤 =====
             if(is_collision_imminent((struct Hex){self_q,self_r},(struct Hex){q,r})) continue;
             if (!is_position_in_shape((struct Hex){q,r})) continue;
             if (is_occupied[q + 100][r + 100]) continue;
             if (q == self_q && r == self_r) continue;
+            
+            // ✅ 绝对禁止向下移动
             if (r < self_r) continue;
-            if (mydata->original_position.q == q && mydata->original_position.r == r) continue;
-
-            if ((q == -3 && r == 4) || (q == -2 && r == 4) || 
-                (q == -2 && r == 3) || (q == -1 && r == 3)) continue;
-
-            if (is_position_in_history((struct Hex){q,r})){
-                #if 0
-                if(have_oucciped_count>27){
-                    printf("累计数量：%d\n",have_oucciped_count);
-                }else{
+            
+            // ✅ 动态水平移动限制：基于连续失败次数
+            if (r == self_r) {  // 水平移动
+                if (consecutive_failures < 58) {  // 短暂失败时禁止水平移动
                     continue;
                 }
-                #endif 
-                continue;
-            } 
-            //if (last_find_from.q == q && last_find_from.r == r) continue;
-
-            if (!check_target_localizability((struct Hex){self_q, self_r}, (struct Hex){q, r})) {
-                continue;
+                // 多次失败时，允许水平移动
             }
+            
+            if (mydata->original_position.q == q && mydata->original_position.r == r) continue;
+            #if 0
+            if ((q == -6 && r == 8) || (q == -5 && r == 8) || 
+                (q == -6 && r == 7) || (q == -5 && r == 7)|| 
+                (q == -5 && r == 6) || (q == -4 && r == 6)|| 
+                (q == -5 && r == 5) || (q == -4 && r == 5)|| 
+                (q == -4 && r == 4) || (q == -3 && r == 4)|| 
+                (q == -4 && r == 3) || (q == -3 && r == 3)|| 
+                (q == -3 && r == 2) || (q == -2 && r == 2)|| 
+                (q == -1 && r == 4) || (q == 0 && r == 4)|| 
+                (q == 0 && r == 3) || (q == 1 && r == 3)|| 
+                (q == 0 && r == 2) || (q == 1 && r == 2)) continue;
+            #else
+            if ((q == -3 && r == 4) || (q == -2 && r == 4) || 
+                (q == -2 && r == 3) || (q == -1 && r == 3)) continue;
+            #endif
+            if (is_position_in_history((struct Hex){q,r})) continue;
+            if (!check_target_localizability((struct Hex){self_q, self_r}, (struct Hex){q, r})) continue;
 
-            double dist = hex_distance(self_q, self_r, q, r);
-            if (dist < best_dist) {
-                best_dist = dist;
+            // ✅ 评分系统
+            int score = calculate_move_score(self_q, self_r, q, r, consecutive_failures);
+            
+            if (score > best_score) {
+                best_score = score;
                 best.q = q;
                 best.r = r;
+                best_dist = hex_distance(self_q, self_r, q, r);
             }
         }
     }
 
-
-
-    printf("Robot %d: 找到目标点 (%d, %d), 距离=%.1f\n", kilo_uid, best.q, best.r, best_dist);
+    // ✅ 更新失败计数
+    if (best.q == 99) {
+        consecutive_failures++;
+        printf("Robot %d: 未找到目标点，连续失败=%d\n", kilo_uid, consecutive_failures);
+    } else {
+        consecutive_failures = 0;
+        printf("Robot %d: 找到目标点 (%d, %d), 评分=%d\n", 
+               kilo_uid, best.q, best.r, best_score);
+    }
+    
     return best;
 }
 #else
@@ -728,7 +775,7 @@ void findShapePositionState() {
         last_find_from.r = mydata->original_position.r; 
         last_find_to.q = mydata->target_q; 
         last_find_to.r = mydata->target_r; 
-        
+        update_occupancy(mydata->target_shape_index, 1);
  
         shape_entry_in_progress = 1;
         current_shape_entry_robot = kilo_uid;
@@ -745,6 +792,7 @@ void findShapePositionState() {
             set_bot_state(IDLE);
             printf("Robot %d: 没找到合适的，下一个找位置\n", kilo_uid);
             should_move_to_shape = true;
+            printf("这里设+\n");
             set_move_type(STOP);
             omni_stop();
         
@@ -802,7 +850,7 @@ void moveToShapeState() {
             mydata->original_position.q = mydata->hex_q;
             mydata->original_position.r = mydata->hex_r;
             printf("Robot %d: 已经到达位置 (%d.%d), 下一步补位\n",kilo_uid,mydata->hex_q,mydata->hex_r);
-            update_occupancy(mydata->target_shape_index, 1);
+            //update_occupancy(mydata->target_shape_index, 1);
             mydata->shape_position_occupied = 1;
 
             shape_entry_in_progress = 0;
@@ -877,11 +925,11 @@ void checkChainRelocationOpportunity(void) {
     }
 
     struct Hex my_hex = {mydata->hex_q, mydata->hex_r};
-/*
+#if 0
     if(is_collision_imminent(my_hex,global_vacancy)){
         return;
     }
-*/
+#endif
     if(is_position_in_shape(global_vacancy)){
         if(!check_target_localizability((struct Hex){my_hex.q,my_hex.r},(struct Hex){global_vacancy.q,global_vacancy.r})) 
             return;
@@ -937,6 +985,7 @@ void checkChainRelocationOpportunity(void) {
     set_bot_state(CHAIN_RELOCATION);
     mydata->relocation_start_time = kilo_ticks;
     should_move_to_shape = false;
+    printf("这里设-\n");
  
 }
 
@@ -956,6 +1005,7 @@ void chainRelocationState() {
         current_shape_entry_robot = 0;
         clear_global_vacancy(); // 清除当前空缺
         should_move_to_shape = true;
+        printf("这里设+\n");
         printf("重置状态，开始新一轮\n");
         // 触发新的形状进入
         current_formation_phase = 0;
@@ -1075,6 +1125,7 @@ void check_relocation_chain_completion(void) {
         current_shape_entry_robot = 0;
         clear_global_vacancy(); // 清除当前空缺
         should_move_to_shape = true;
+        printf("这里设+\n");
 
         // 触发新的形状进入
         current_formation_phase = 0;
