@@ -620,7 +620,7 @@ struct Hex find_nearest_unoccupied_target() {
     double best_dist = INFINITY;
     int best_score = -1000;
 
-    const int COMM_RANGE = 3;
+    const int COMM_RANGE = 1;
     int self_q = mydata->hex_q;
     int self_r = mydata->hex_r;
 
