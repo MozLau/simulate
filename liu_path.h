@@ -41,6 +41,25 @@ bool is_hex_adjacent(struct Hex a, struct Hex b) {
            (dq == -1 && dr == 1);    // 左上
 }
 
+// 判断输入点是否与给定点集中的任意一点相邻（距离为1）
+bool is_adjacent_to_boundary(struct Hex input) {
+    // 定义目标点集
+    struct Hex target_points[] = {
+        {-3, 1}, {-2, 1}, {-1, 1}, 
+        {0, 1}, {1, 1}, {2, 1}
+    };
+    int num_points = sizeof(target_points) / sizeof(target_points[0]);
+    
+    // 检查输入点是否与任意目标点相邻
+    for (int i = 0; i < num_points; i++) {
+        if (is_hex_adjacent(input, target_points[i])) {
+            return true;
+        }
+    }
+    
+    return false;
+}
+
 
 struct Hex cart_to_hex(struct Cartesian cart) {
     float lattice_size = kilo_lattice_size;
@@ -65,9 +84,8 @@ double hex_distance(int q1, int r1, int q2, int r2) {
     return (abs(q1 - q2) + abs(q1 + r1 - q2 - r2) + abs(r1 - r2)) / 2.0;
 }
 
-/*  分布式 */
 
-/* -------补位---------- */
+/* ---------------------------- 补位 ---------------------------- */
 // 当机器人移动到形状位置时，发布空缺信息
 void publish_vacancy_after_movement(struct Hex old_position) {
     mydata->known_vacancy = old_position;
@@ -75,11 +93,29 @@ void publish_vacancy_after_movement(struct Hex old_position) {
     printf("Robot %d: 发布空缺位置 (%d,%d)\n", kilo_uid, old_position.q, old_position.r);
 }
 
+// 检查是否可以开始补位
+bool can_proceed_with_relocation() {
+    // 检查邻居中是否有冲突的补位意图
+    for (int i = 0; i < mydata->N_Neighbors; i++) {
+        if (mydata->neighbors[i].has_relocation_intent &&
+            mydata->neighbors[i].relocation_target.q == mydata->relocation_target.q &&
+            mydata->neighbors[i].relocation_target.r == mydata->relocation_target.r) {
+            
+            // 基于ID的冲突解决：ID小的获胜
+            if (kilo_uid > mydata->neighbors[i].ID) {
+                printf("Robot %d: 补位冲突，邻居 %d 有更高优先级\n", 
+                       kilo_uid, mydata->neighbors[i].ID);
+                return false;
+            }
+        }
+    }
+    return true;
+}
 
-// 在 can_safely_start_movement 中考虑消息延迟
+// 考虑消息延迟
 bool can_safely_start_movement() {
     // 如果还没有目标，则不能移动
-    if (mydata->intended_target.q == 99 && mydata->intended_target.r == 99) {
+    if (mydata->intended_target_q == 99 && mydata->intended_target_r == 99) {
         return false;
     }
 
@@ -130,25 +166,6 @@ bool has_relocation_opportunity() {
         return false;
     }
     
-    return true;
-}
-
-// 检查是否可以开始补位
-bool can_proceed_with_relocation() {
-    // 检查邻居中是否有冲突的补位意图
-    for (int i = 0; i < mydata->N_Neighbors; i++) {
-        if (mydata->neighbors[i].has_relocation_intent &&
-            mydata->neighbors[i].relocation_target.q == mydata->relocation_target.q &&
-            mydata->neighbors[i].relocation_target.r == mydata->relocation_target.r) {
-            
-            // 基于ID的冲突解决：ID小的获胜
-            if (kilo_uid > mydata->neighbors[i].ID) {
-                printf("Robot %d: 补位冲突，邻居 %d 有更高优先级\n", 
-                       kilo_uid, mydata->neighbors[i].ID);
-                return false;
-            }
-        }
-    }
     return true;
 }
 
@@ -246,8 +263,8 @@ bool can_safely_move() {
         
         // 还可以检查邻居是否有移动意图到相同区域
         if (mydata->neighbors[i].has_movement_intent &&
-            mydata->neighbors[i].intended_target.q == mydata->target_q &&
-            mydata->neighbors[i].intended_target.r == mydata->target_r) {
+            mydata->neighbors[i].intended_target_q == mydata->target_q &&
+            mydata->neighbors[i].intended_target_r == mydata->target_r) {
             printf("Robot %d: 邻居 %d 有相同移动意图，协调中...\n",
                    kilo_uid, mydata->neighbors[i].ID);
             return resolve_movement_conflict(mydata->neighbors[i].ID);
@@ -274,7 +291,8 @@ bool can_safely_move_enhanced() {
 // 开始移动前的准备
 void prepare_for_movement(struct Hex target) {
     mydata->has_movement_intent = 1;
-    mydata->intended_target = target;
+    mydata->intended_target_q = target.q;
+    mydata->intended_target_r = target.r;
     mydata->target_intent_time = kilo_ticks;
     mydata->movement_start_time = kilo_ticks;
     
@@ -294,7 +312,8 @@ void prepare_for_movement(struct Hex target) {
 void finish_movement() {
     mydata->is_moving = 0;
     mydata->has_movement_intent = 0;
-    mydata->intended_target = (struct Hex){99, 99};
+    mydata->intended_target_q = 99;
+    mydata->intended_target_r = 99;
 }
 
 void init_move_history() {
@@ -665,8 +684,8 @@ bool is_position_occupied_by_neighbor(int q, int r) {
         
         // 🔧 新增：检查邻居的意图目标
         if (mydata->neighbors[i].has_movement_intent &&
-            mydata->neighbors[i].intended_target.q == q && 
-            mydata->neighbors[i].intended_target.r == r) {
+            mydata->neighbors[i].intended_target_q == q && 
+            mydata->neighbors[i].intended_target_r == r) {
             printf("Robot %d: 位置 (%d,%d) 被邻居 %d 声明意图\n", 
                    kilo_uid, q, r, mydata->neighbors[i].ID);
             return true;
@@ -734,8 +753,8 @@ bool has_available_vacancies() {
         if (kilo_ticks - mydata->vacancy_timestamp < 200) {
             // 🔧 修改：检查这个空缺是否仍然可用
             if (is_position_empty_and_available(mydata->known_vacancy.q, mydata->known_vacancy.r)) {
-                printf("Robot %d: 已知空缺位置 (%d,%d) 仍然可用\n", 
-                       kilo_uid, mydata->known_vacancy.q, mydata->known_vacancy.r);
+                printf("第 %lu 次 --- 检查阶段 Robot %d: 已知空缺位置 (%d,%d) 仍然可用\n", 
+                       kilo_ticks, kilo_uid, mydata->known_vacancy.q, mydata->known_vacancy.r);
                 return true;
             } else {
                 printf("Robot %d: 已知空缺位置 (%d,%d) 已不可用\n", 
@@ -747,7 +766,7 @@ bool has_available_vacancies() {
     }
     
     // 方法2：扫描通信范围内的空位
-    const int SCAN_RANGE = 2;
+    const int SCAN_RANGE = 1;
     int self_q = mydata->hex_q;
     int self_r = mydata->hex_r;
     
@@ -763,7 +782,7 @@ bool has_available_vacancies() {
             
             // 检查是否是空位
             if (is_position_empty_and_available(q, r)) {
-                printf("Robot %d: 发现空位 (%d,%d)\n", kilo_uid, q, r);
+                printf("第 %lu 次 --- 检查阶段:Robot %d: 发现空位 (%d,%d)\n", kilo_ticks, kilo_uid, q, r);
                 available_count++;
                 // 记录这个空缺信息
                 mydata->known_vacancy.q = q;
@@ -798,7 +817,7 @@ bool has_available_vacancies() {
         }
     }
     
-    printf("Robot %d: 未发现可用空位 (扫描了 %d 个位置)\n", kilo_uid, available_count);
+    //printf("Robot %d: 未发现可用空位 (扫描了 %d 个位置)\n", kilo_uid, available_count);
     return false;
 }
 #else
@@ -836,7 +855,7 @@ bool has_available_vacancies() {
             
             // 检查是否是空位
             if (is_position_empty_and_available(q, r)) {
-                printf("Robot %d: 发现空位 (%d,%d)\n", kilo_uid, q, r);
+                printf("检查空位中, Robot %d: 发现空位 (%d,%d)\n", kilo_uid, q, r);
                 return true;
             }else{
                 printf("点(%d,%d)不是空位\n",q,r);
@@ -865,13 +884,6 @@ bool has_available_vacancies() {
 }
 #endif
 
-// 第一阶段检查：是否可以开始查找（宽松条件）
-bool can_start_finding() {
-    // 只检查是否有可用空位，不检查邻居状态
-    return has_available_vacancies();
-}
-
-
 // 检查是否可以开始查找（更宽松的条件）
 bool can_start_finding_enhanced() {
     // 如果已经在移动过程中，不重复触发
@@ -883,10 +895,13 @@ bool can_start_finding_enhanced() {
     if (!has_available_vacancies()) {
         return false;
     }
-    
+#if 0
     // 基于ID和时间的随机退避，避免所有机器人同时开始
     uint32_t random_delay = (kilo_uid % 8) * 30;
-    return (kilo_ticks % 400) > (200 + random_delay);
+    return (kilo_ticks % 400) > (200 + random_delay);+
+#else
+    return true;
+#endif
 }
 
 // 第二阶段检查：是否可以开始移动（严格条件）
@@ -916,8 +931,8 @@ bool can_start_moving() {
 bool is_target_claimed_by_neighbor(int q, int r) {
     for (int i = 0; i < mydata->N_Neighbors; i++) {
         if (mydata->neighbors[i].has_movement_intent &&
-            mydata->neighbors[i].intended_target.q == q &&
-            mydata->neighbors[i].intended_target.r == r) {
+            mydata->neighbors[i].intended_target_q == q &&
+            mydata->neighbors[i].intended_target_r == r) {
             
             // 如果邻居的声明时间更早，则尊重其声明
             if (mydata->neighbors[i].target_intent_time < mydata->target_intent_time) {
@@ -956,7 +971,7 @@ struct Hex find_nearest_unoccupied_target_distributed() {
     struct Hex best = {99, 99};
     double best_dist = INFINITY;
 
-    const int COMM_RANGE = 2;
+    const int COMM_RANGE = 1;
     int self_q = mydata->hex_q;
     int self_r = mydata->hex_r;
 
@@ -1009,7 +1024,7 @@ struct Hex find_nearest_unoccupied_target_distributed() {
         }
     }
 
-    //printf("Robot %d: 找到目标点 (%d, %d), 距离=%.1f\n", kilo_uid, best.q, best.r, best_dist);
+    printf("第 %lu 次 ---Robot %d: 找到目标点 (%d, %d), 距离=%.1f\n", kilo_ticks, kilo_uid, best.q, best.r, best_dist);
     return best;
 }
 #if 0
@@ -1033,21 +1048,33 @@ int find_optimal_shape_position_index() {
     return -1;
 }
 #endif
+
 // 检查是否可以声明目标
 bool can_claim_target(struct Hex target) {
     for (int i = 0; i < mydata->N_Neighbors; i++) {
+        printf("声明阶段,检查邻居\n");
+        printf("邻居 id: %d\n",mydata->neighbors[i].ID);
+        printf("邻居 位置: (%d,%d)\n",mydata->neighbors[i].hex_q,mydata->neighbors[i].hex_r);
+        printf("邻居 意图: %d\n",mydata->neighbors[i].has_movement_intent);
+        printf("邻居 目标: (%d,%d)\n",mydata->neighbors[i].intended_target_q,mydata->neighbors[i].intended_target_r);
         if (mydata->neighbors[i].has_movement_intent &&
-            mydata->neighbors[i].intended_target.q == target.q &&
-            mydata->neighbors[i].intended_target.r == target.r) {
-            
-            // 冲突解决：时间优先，ID次优
+            mydata->neighbors[i].intended_target_q == target.q &&
+            mydata->neighbors[i].intended_target_r == target.r) {
+            printf("邻居的意图 %d\n",mydata->neighbors[i].has_movement_intent);
+            // 冲突解决：时间优先,ID次优
             if (mydata->neighbors[i].target_intent_time < mydata->target_intent_time) {
+                printf("邻居的时间更早\n");
                 return false; // 邻居声明更早
             } else if (mydata->neighbors[i].target_intent_time == mydata->target_intent_time &&
                        mydata->neighbors[i].ID < kilo_uid) {
+                printf("邻居的 id 更小\n");
                 return false; // 同时声明，但邻居ID更小
+            }else{
+                printf("我的意图更优\n");
             }
         }
+        
+
     }
     return true;
 }
@@ -1093,11 +1120,24 @@ bool is_position_occupied_by_neighbor(struct Hex target) {
 
 // 检查本地维护的占据信息
 bool is_occupied_locally(struct Hex target) {
-    // 这里可以保留现有的 is_occupied 数组，但要明白它的局限性
-    // 它只反映通过邻居消息了解到的占据状态
+    // 自己就占着这个格
+    if (mydata->hex_q == target.q && mydata->hex_r == target.r)
+        return true;
+
+    for (int i = 0; i < mydata->N_Neighbors; i++) {
+
+        // 邻居当前格子等于目标
+        if (mydata->neighbors[i].hex_q == target.q && mydata->neighbors[i].hex_r == target.r)
+            return true;
+
+        // 邻居正移动到目标
+        if (mydata->neighbors[i].is_moving && mydata->neighbors[i].intended_target_q == target.q && mydata->neighbors[i].intended_target_r == target.r)
+            return true;
+    }
 
     return false;
 }
+
 
 // 检查目标是否仍然可用（分布式版本）
 bool is_target_still_available(struct Hex target) {
@@ -1136,10 +1176,11 @@ void findShapePositionState_distributed() {
         if (selected_target.q != 99 && selected_target.r != 99) {
             // 声明目标意图
             mydata->has_movement_intent = 1;
-            mydata->intended_target = selected_target;
+            mydata->intended_target_q = selected_target.q;
+            mydata->intended_target_r = selected_target.r;
             mydata->target_intent_time = kilo_ticks;
             
-            printf("Robot %d: 声明目标意图 (%d,%d)\n", kilo_uid, selected_target.q, selected_target.r);
+            printf("第 %lu 次 --- Robot %d: 声明目标意图 (%d,%d)\n", kilo_ticks, kilo_uid, selected_target.q, selected_target.r);
         } else {
             // 没有找到合适目标
             //printf("Robot %d: 没有找到合适目标\n", kilo_uid);
@@ -1150,14 +1191,17 @@ void findShapePositionState_distributed() {
     
     // 第二阶段：等待目标确认
     if (mydata->has_movement_intent) {
-        struct Hex current_target = mydata->intended_target;
+        struct Hex current_target = (struct Hex){99,99};
+        current_target.q = mydata->intended_target_q;
+        current_target.r = mydata->intended_target_r;
         // 检查目标是否仍然可用
         if (!is_target_still_available(current_target) || 
                 !verify_target_availability(current_target )) {
             printf("Robot %d: 目标 (%d,%d) 已被占用，重新选择\n", 
                    kilo_uid, current_target.q, current_target.r);
             mydata->has_movement_intent = 0;
-            mydata->intended_target = (struct Hex){99,99};
+            mydata->intended_target_q = 99;
+            mydata->intended_target_r = 99;
             return;
         }
         
@@ -1178,7 +1222,8 @@ void findShapePositionState_distributed() {
                 // 目标冲突，重新选择
                 printf("Robot %d: 目标冲突，重新选择\n", kilo_uid);
                 mydata->has_movement_intent = 0;
-                mydata->intended_target = (struct Hex){99,99};
+                mydata->intended_target_q = 99;
+                mydata->intended_target_r = 99;
             }
         }
     }
@@ -1195,7 +1240,8 @@ void findShapePositionState_distributed() {
         if (selected_target.q != 99 && selected_target.r != 99) {
             // 声明目标意图
             mydata->has_movement_intent = 1;
-            mydata->intended_target = selected_target;
+            mydata->intended_target_q = selected_target.q;
+            mydata->intended_target_r = selected_target.r;
             mydata->target_intent_time = kilo_ticks;
             
             printf("Robot %d: ✅ 声明目标意图 (%d,%d)\n", kilo_uid, selected_target.q, selected_target.r);
@@ -1209,7 +1255,7 @@ void findShapePositionState_distributed() {
     
     // 第二阶段：等待目标确认
     if (mydata->has_movement_intent) {
-        struct Hex current_target = mydata->intended_target;
+        struct Hex current_target = (struct Hex){mydata->intended_target_q,mydata->intended_target_r};
         
         printf("Robot %d: 检查目标 (%d,%d) 可用性\n", kilo_uid, current_target.q, current_target.r);
         
@@ -1218,7 +1264,8 @@ void findShapePositionState_distributed() {
             printf("Robot %d: ❌ 目标 (%d,%d) 已被占用，重新选择\n", 
                    kilo_uid, current_target.q, current_target.r);
             mydata->has_movement_intent = 0;
-            mydata->intended_target = (struct Hex){99,99};
+            mydata->intended_target_q = 99;
+            mydata->intended_target_r = 99;
             return;
         }
         
@@ -1226,7 +1273,8 @@ void findShapePositionState_distributed() {
             printf("Robot %d: ❌ 目标 (%d,%d) 验证失败，重新选择\n", 
                    kilo_uid, current_target.q, current_target.r);
             mydata->has_movement_intent = 0;
-            mydata->intended_target = (struct Hex){99,99};
+            mydata->intended_target_q = 99;
+            mydata->intended_target_r = 99;
             return;
         }
         
@@ -1247,7 +1295,8 @@ void findShapePositionState_distributed() {
                 // 目标冲突，重新选择
                 printf("Robot %d: ⚠️ 目标冲突，重新选择\n", kilo_uid);
                 mydata->has_movement_intent = 0;
-                mydata->intended_target = (struct Hex){99,99};
+                mydata->intended_target_q = 99;
+                mydata->intended_target_r = 99;
             }
         }
     }
@@ -1351,8 +1400,8 @@ bool detect_immediate_conflict_enhanced(int target_q, int target_r) {
     for (int i = 0; i < mydata->N_Neighbors; i++) {
         // 检查1：目标声明冲突
         if (mydata->neighbors[i].has_movement_intent &&
-            mydata->neighbors[i].intended_target.q == target_q &&
-            mydata->neighbors[i].intended_target.r == target_r) {
+            mydata->neighbors[i].intended_target_q == target_q &&
+            mydata->neighbors[i].intended_target_r == target_r) {
             
             // 基于时间戳和ID的优先级
             if (mydata->neighbors[i].target_intent_time < mydata->target_intent_time) {
@@ -1366,7 +1415,7 @@ bool detect_immediate_conflict_enhanced(int target_q, int target_r) {
         // 检查2：路径冲突（邻居也在向同一区域移动）
         struct Cartesian my_pos = {mydata->x, mydata->y};
         struct Cartesian target_pos = hex_to_Cart((struct Hex){target_q, target_r});
-        struct Cartesian neighbor_target = hex_to_Cart(mydata->neighbors[i].intended_target);
+        struct Cartesian neighbor_target = hex_to_Cart((struct Hex){mydata->neighbors[i].intended_target_q,mydata->neighbors[i].intended_target_r});
         
         if (is_path_conflict_simple(my_pos, target_pos, 
                             (struct Cartesian){mydata->neighbors[i].x, mydata->neighbors[i].y}, 
@@ -1393,8 +1442,8 @@ bool detect_immediate_conflict(int target_q, int target_r) {
     for (int i = 0; i < mydata->N_Neighbors; i++) {
         // 如果邻居也声明要移动到同一个目标
         if (mydata->neighbors[i].has_movement_intent &&
-            mydata->neighbors[i].intended_target.q == target_q &&
-            mydata->neighbors[i].intended_target.r == target_r) {
+            mydata->neighbors[i].intended_target_q == target_q &&
+            mydata->neighbors[i].intended_target_r == target_r) {
             
             // 基于ID解决冲突
             if (mydata->neighbors[i].ID < kilo_uid) {
@@ -1445,7 +1494,8 @@ void planMovementState_distributed() {
     // === 3️⃣ 宣告移动意图 ===
     if (!mydata->has_movement_intent) {
         mydata->has_movement_intent = 1;
-        mydata->intended_target = target;
+        mydata->intended_target_q = target.q;
+        mydata->intended_target_r = target.r;
         mydata->target_intent_time = kilo_ticks;
         printf("Robot %d: 📡 宣告移动意图 (%d,%d)\n", kilo_uid, target.q, target.r);
         return;
@@ -1500,7 +1550,7 @@ void moveToShapeState_distributed() {
         set_bot_state(FIND_SHAPE_POSITION);
         return;
     }
-
+    printf("机器人 %d 开始进入位置(%d,%d)\n", kilo_uid,mydata->target_q,mydata->target_r);
     // === 2️⃣ 执行移动 ===
     int result = omni_move_to_lattice(&current_target);
 

@@ -89,6 +89,39 @@ void reset_ribbon_status(void)
 void process_message()
 {
     uint8_t *data = RB_front().msg.data;
+#if 0
+     // 添加诊断打印
+    printf("\n=== 消息接收诊断 - Robot %d ===\n", kilo_uid);
+    printf("收到消息数据: ");
+    for(int i = 0; i < 70; i++) { // 检查前70个字节
+        if(i % 16 == 0) printf("\n[%02d-%02d]: ", i, i+15);
+        printf("%02X ", data[i]);
+        
+        // 检查特定标记字节
+        if(i == 9 && data[i] == 0xAA) printf("(标记9)");
+        if(i == 10 && data[i] == 0xBB) printf("(标记10)");
+        if(i == 11 && data[i] == 0xCC) printf("(标记11)");
+    }
+    printf("\n");
+    
+    // 检查关键数据是否完整
+    uint16_t sender_id = data[0] | (data[1] << 8);
+    printf("发送者ID: %d (字节0-1: %02X %02X)\n", sender_id, data[0], data[1]);
+    
+    // 检查六边形坐标
+    int16_t hex_q = data[38] | (data[39] << 8);
+    int16_t hex_r = data[40] | (data[41] << 8);
+    printf("六边形坐标: q=%d, r=%d (字节38-41: %02X %02X %02X %02X)\n", 
+           hex_q, hex_r, data[38], data[39], data[40], data[41]);
+    
+    // 检查移动意图数据
+    printf("移动意图: 字节54=%d, 字节55=%d\n", data[54], data[55]);
+    printf("目标位置: q=%d, r=%d (字节56-57: %02X %02X)\n", 
+           (int8_t)data[56], (int8_t)data[57], data[56], data[57]);
+    
+    printf("==============================\n");
+#endif
+
 
         uint8_t i;
         uint16_t ID;
@@ -133,13 +166,12 @@ void process_message()
                 // mydata->neighbors[i].hex_q = data[26];
                 // mydata->neighbors[i].hex_r = data[27];
 
-                mydata->neighbors[i].idle_ribbon_ID = data[28];
-                mydata->neighbors[i].idle_on_ribbon_ID = data[29];
-                
-                mydata->neighbors[i].exists_moving_robot = data[30];
-                mydata->neighbors[i].exists_child_idle_ribbon = data[31];
+                mydata->neighbors[i].is_moving = data[28];
+                mydata->neighbors[i].has_movement_intent = data[29];
+                mydata->neighbors[i].intended_target_q = data[30] | (data[31] << 8);
+                mydata->neighbors[i].intended_target_r = data[32] | (data[33] << 8);
+                mydata->neighbors[i].target_intent_time = data[34] | (data[35] << 8);
 
-                mydata->neighbors[i].exists_moving_robot_tick = data[32] | (data[33] << 8) | (data[34] << 16)| (data[35] << 24);
                 mydata->neighbors[i].idle_ribbon_my_turn = data[36];
                 mydata->neighbors[i].stage1complete = data[37];
 
@@ -147,26 +179,17 @@ void process_message()
                 mydata->neighbors[i].hex_r = data[40] | (data[41] << 8);
 
                 mydata->neighbors[i].sum_of_bots_in_hole = data[42] | (data[43] << 8);
-                mydata->neighbors[i].sum_of_bots_ID = data[44] | (data[45] << 8);
-                mydata->neighbors[i].system_step = data[46] | (data[47] << 8);
+               
+                mydata->neighbors[i].shape_position_occupied = data[44];
 
-                mydata->neighbors[i].faulty_type = data[48];
-                mydata->neighbors[i].faulty_type_tick = data[49] | (data[50] << 8) | (data[51] << 16)| (data[52] << 24);
-                mydata->neighbors[i].shape_position_occupied = data[53];
+                mydata->neighbors[i].movement_priority = data[45];
 
-                mydata->neighbors[i].is_moving = data[54];
-                mydata->neighbors[i].has_movement_intent = data[55];
-                mydata->neighbors[i].intended_target.q = (int8_t)data[56];
-                mydata->neighbors[i].intended_target.r = (int8_t)data[57];
-                mydata->neighbors[i].target_intent_time = data[58] | (data[59] << 8);
-        mydata->neighbors[i].movement_priority = data[60];
-
-        mydata->neighbors[i].known_vacancy.q = data[61];
-    mydata->neighbors[i].known_vacancy.r = data[62];
-    mydata->neighbors[i].vacancy_timestamp = data[63] | (data[64] << 8);
-    mydata->neighbors[i].has_relocation_intent = data[65];
-    mydata->neighbors[i].relocation_target.q = data[66];
-    mydata->neighbors[i].relocation_target.r = data[67];
+                mydata->neighbors[i].known_vacancy.q = data[46];
+                mydata->neighbors[i].known_vacancy.r = data[47];
+                mydata->neighbors[i].vacancy_timestamp = data[48] | (data[49] << 8);
+                mydata->neighbors[i].has_relocation_intent = data[50];
+                mydata->neighbors[i].relocation_target.q = data[51];
+                mydata->neighbors[i].relocation_target.r = data[52];
 
                 return;
             }
@@ -211,13 +234,12 @@ void process_message()
 
 
 
-        mydata->neighbors[i].idle_ribbon_ID = data[28];
-        mydata->neighbors[i].idle_on_ribbon_ID = data[29];
+        mydata->neighbors[i].is_moving = data[28];
+        mydata->neighbors[i].has_movement_intent = data[29];
+        mydata->neighbors[i].intended_target_q = data[30] | (data[31] << 8);
+        mydata->neighbors[i].intended_target_r = data[32] | (data[33] << 8);
+        mydata->neighbors[i].target_intent_time = data[34] | (data[35] << 8);
 
-        mydata->neighbors[i].exists_moving_robot = data[30];
-        mydata->neighbors[i].exists_child_idle_ribbon = data[31];
-
-        mydata->neighbors[i].exists_moving_robot_tick = data[32] | (data[33] << 8) | (data[34] << 16)| (data[35] << 24);
         mydata->neighbors[i].idle_ribbon_my_turn = data[36];
         mydata->neighbors[i].stage1complete = data[37];
 
@@ -225,25 +247,17 @@ void process_message()
         mydata->neighbors[i].hex_r = data[40] | (data[41] << 8);
 
         mydata->neighbors[i].sum_of_bots_in_hole = data[42] | (data[43] << 8);
-        mydata->neighbors[i].sum_of_bots_ID = data[44] | (data[45] << 8);
-        mydata->neighbors[i].system_step = data[46] | (data[47] << 8);
+        
+        mydata->neighbors[i].shape_position_occupied = data[44];
 
-        mydata->neighbors[i].faulty_type = data[48];
-        mydata->neighbors[i].faulty_type_tick = data[49] | (data[50] << 8) | (data[51] << 16)| (data[52] << 24);
-        mydata->neighbors[i].shape_position_occupied = data[53];
-        mydata->neighbors[i].is_moving = data[54];
-        mydata->neighbors[i].has_movement_intent = data[55];
-        mydata->neighbors[i].intended_target.q = (int8_t)data[56];
-        mydata->neighbors[i].intended_target.r = (int8_t)data[57];
-        mydata->neighbors[i].target_intent_time = data[58] | (data[59] << 8);
-        mydata->neighbors[i].movement_priority = data[60];
+        mydata->neighbors[i].movement_priority = data[45];
 
-        mydata->neighbors[i].known_vacancy.q = data[61];
-    mydata->neighbors[i].known_vacancy.r = data[62];
-    mydata->neighbors[i].vacancy_timestamp = data[63] | (data[64] << 8);
-    mydata->neighbors[i].has_relocation_intent = data[65];
-    mydata->neighbors[i].relocation_target.q = data[66];
-    mydata->neighbors[i].relocation_target.r = data[67];
+        mydata->neighbors[i].known_vacancy.q = data[46];
+        mydata->neighbors[i].known_vacancy.r = data[47];
+        mydata->neighbors[i].vacancy_timestamp = data[48] | (data[49] << 8);
+        mydata->neighbors[i].has_relocation_intent = data[50];
+        mydata->neighbors[i].relocation_target.q = data[51];
+        mydata->neighbors[i].relocation_target.r = data[52];
 }
 
 /* Go through the list of neighbors, remove entries older than a threshold,
@@ -315,21 +329,15 @@ void setup_message(void)
         //edge-following info
         mydata->transmit_msg.data[25] = mydata->N_followed;
 
+        mydata->transmit_msg.data[28] = mydata->is_moving;
+        mydata->transmit_msg.data[29] = mydata->has_movement_intent;
+        mydata->transmit_msg.data[30] = (int16_t)mydata->intended_target_q  & 0xff;
+        mydata->transmit_msg.data[31] = (int16_t)mydata->intended_target_q >> 8;
+        mydata->transmit_msg.data[32] = (int16_t)mydata->intended_target_r  & 0xff;
+        mydata->transmit_msg.data[33] = (int16_t)mydata->intended_target_r >> 8;
+        mydata->transmit_msg.data[34] = mydata->target_intent_time & 0xFF;
+        mydata->transmit_msg.data[35] = (mydata->target_intent_time >> 8) & 0xFF;
 
-
-        mydata->transmit_msg.data[28] = mydata->idle_ribbon_ID;
-        mydata->transmit_msg.data[29] = mydata->idle_on_ribbon_ID;
-
-
-        mydata->transmit_msg.data[30] = mydata->exists_moving_robot;
-        mydata->transmit_msg.data[31] = mydata->exists_child_idle_ribbon;
-
-        mydata->transmit_msg.data[32] = mydata->exists_moving_robot_tick & 0xff;     // 0 low  ID
-        mydata->transmit_msg.data[33] = (mydata->exists_moving_robot_tick >> 8) & 0xff;       // 1 high ID
-        mydata->transmit_msg.data[34] = (mydata->exists_moving_robot_tick >> 16) & 0xff;       // 2 high ID
-        mydata->transmit_msg.data[35] = (mydata->exists_moving_robot_tick >> 24) & 0xff;       // 3 high ID
-        mydata->transmit_msg.data[36] = mydata->idle_ribbon_my_turn;
-        mydata->transmit_msg.data[37] = mydata->stage1complete;
 
         mydata->transmit_msg.data[38] = (int16_t) mydata->hex_q  & 0xff;     // low 
         mydata->transmit_msg.data[39] = (int16_t) mydata->hex_q >> 8;       // high 
@@ -339,39 +347,17 @@ void setup_message(void)
         mydata->transmit_msg.data[42] = mydata->sum_of_bots_in_hole & 0xff;     // low 
         mydata->transmit_msg.data[43] = mydata->sum_of_bots_in_hole >> 8;       // high 
 
-        mydata->transmit_msg.data[44] = mydata->sum_of_bots_ID[0] & 0xff;     // low 
-        mydata->transmit_msg.data[45] = mydata->sum_of_bots_ID[0] >> 8;       // high 
+        mydata->transmit_msg.data[44] = mydata->shape_position_occupied;
+        mydata->transmit_msg.data[45] = mydata->movement_priority;
 
-        mydata->transmit_msg.data[46] = mydata->system_step & 0xff; //low
-        mydata->transmit_msg.data[47] = mydata->system_step >> 8; //high
-
-        mydata->transmit_msg.data[48] = mydata->faulty_type;
-
-        mydata->transmit_msg.data[49] = mydata->faulty_type_tick & 0xff;     // 0 low  ID
-        mydata->transmit_msg.data[50] = (mydata->faulty_type_tick >> 8) & 0xff;       // 1 high ID
-        mydata->transmit_msg.data[51] = (mydata->faulty_type_tick >> 16) & 0xff;       // 2 high ID
-        mydata->transmit_msg.data[52] = (mydata->faulty_type_tick >> 24) & 0xff;       // 3 high ID
-        #if 1
-        mydata->transmit_msg.data[53] = mydata->shape_position_occupied;
-
-        mydata->transmit_msg.data[54] = mydata->is_moving;
-        mydata->transmit_msg.data[55] = mydata->has_movement_intent;
-        mydata->transmit_msg.data[56] = (int8_t)mydata->intended_target.q;
-        mydata->transmit_msg.data[57] = (int8_t)mydata->intended_target.r;
-        mydata->transmit_msg.data[58] = mydata->target_intent_time & 0xFF;
-        mydata->transmit_msg.data[59] = (mydata->target_intent_time >> 8) & 0xFF;
-        mydata->transmit_msg.data[60] = mydata->movement_priority;
-
-        mydata->transmit_msg.data[61] = mydata->known_vacancy.q;
-    mydata->transmit_msg.data[62] = mydata->known_vacancy.r;
-    mydata->transmit_msg.data[63] = mydata->vacancy_timestamp & 0xFF;
-    mydata->transmit_msg.data[64] = (mydata->vacancy_timestamp >> 8) & 0xFF;
-    mydata->transmit_msg.data[65] = mydata->has_relocation_intent;
-    mydata->transmit_msg.data[66] = mydata->relocation_target.q;
-    mydata->transmit_msg.data[67] = mydata->relocation_target.r;
-
-        #endif 
-        
+        mydata->transmit_msg.data[46] = mydata->known_vacancy.q;
+        mydata->transmit_msg.data[47] = mydata->known_vacancy.r;
+        mydata->transmit_msg.data[48] = mydata->vacancy_timestamp & 0xFF;
+        mydata->transmit_msg.data[49] = (mydata->vacancy_timestamp >> 8) & 0xFF;
+        mydata->transmit_msg.data[50] = mydata->has_relocation_intent;
+        mydata->transmit_msg.data[51] = mydata->relocation_target.q;
+        mydata->transmit_msg.data[52] = mydata->relocation_target.r;
+     
         //2 bytes for message crc
         mydata->transmit_msg.crc = message_crc(&mydata->transmit_msg);
 
@@ -541,7 +527,8 @@ void setup()
     mydata->known_vacancy = (struct Hex){99, 99};
     mydata->is_moving = 0;
     mydata->has_movement_intent = 0;
-    mydata->intended_target = (struct Hex){99, 99};
+    mydata->intended_target_q =  99;
+    mydata->intended_target_r =  99;
     mydata->movement_priority = 0;
     mydata->target_intent_time = 0;
     mydata->movement_start_time = 0;
@@ -836,7 +823,7 @@ void loop()
     
     switch(get_bot_state()) {
         case IDLE: 
-            if (can_start_finding_enhanced()){
+            if (can_start_finding_enhanced() && is_adjacent_to_boundary((struct Hex){mydata->hex_q,mydata->hex_r})){
                 set_bot_state(FIND_SHAPE_POSITION);
 
                 //printf("Robot %d: 🎯 Starting to find shape position\n", kilo_uid);

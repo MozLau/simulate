@@ -177,7 +177,8 @@ typedef struct {
     
     uint8_t is_moving;
     uint8_t has_movement_intent;
-    struct Hex intended_target;
+    int16_t intended_target_q;
+    int16_t intended_target_r;
     uint32_t target_intent_time;        // 目标意图时间
     uint8_t movement_priority;
 
@@ -373,7 +374,8 @@ typedef struct
     uint8_t movement_priority;           // 移动优先级（可用于解决冲突）
     uint32_t movement_start_time;        // 移动开始时间
     uint8_t has_movement_intent;         // 是否有移动意图
-    struct Hex intended_target;          // 意图移动的目标位置
+    int16_t intended_target_q;
+    int16_t intended_target_r;          // 意图移动的目标位置
     uint32_t target_intent_time;        // 目标意图时间
     
     // 添加移动协调相关字段
