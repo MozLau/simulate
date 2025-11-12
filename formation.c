@@ -184,12 +184,11 @@ void process_message()
 
                 mydata->neighbors[i].movement_priority = data[45];
 
-                mydata->neighbors[i].known_vacancy.q = data[46];
-                mydata->neighbors[i].known_vacancy.r = data[47];
-                mydata->neighbors[i].vacancy_timestamp = data[48] | (data[49] << 8);
-                mydata->neighbors[i].has_relocation_intent = data[50];
-                mydata->neighbors[i].relocation_target.q = data[51];
-                mydata->neighbors[i].relocation_target.r = data[52];
+                mydata->neighbors[i].leader_id = data[46];
+                mydata->neighbors[i].follower_id = data[47];
+                mydata->neighbors[i].is_chain_leader = data[48];
+                mydata->neighbors[i].chain_position = data[49];
+
 
                 return;
             }
@@ -252,12 +251,11 @@ void process_message()
 
         mydata->neighbors[i].movement_priority = data[45];
 
-        mydata->neighbors[i].known_vacancy.q = data[46];
-        mydata->neighbors[i].known_vacancy.r = data[47];
-        mydata->neighbors[i].vacancy_timestamp = data[48] | (data[49] << 8);
-        mydata->neighbors[i].has_relocation_intent = data[50];
-        mydata->neighbors[i].relocation_target.q = data[51];
-        mydata->neighbors[i].relocation_target.r = data[52];
+        mydata->neighbors[i].leader_id = data[46];
+        mydata->neighbors[i].follower_id = data[47];
+        mydata->neighbors[i].is_chain_leader = data[48];
+        mydata->neighbors[i].chain_position = data[49];
+
 }
 
 /* Go through the list of neighbors, remove entries older than a threshold,
@@ -524,17 +522,15 @@ void setup()
 #endif
 
     // 初始化移动协调字段
-    mydata->known_vacancy = (struct Hex){99, 99};
     mydata->is_moving = 0;
     mydata->has_movement_intent = 0;
     mydata->intended_target_q =  99;
     mydata->intended_target_r =  99;
     mydata->movement_priority = 0;
     mydata->target_intent_time = 0;
-    mydata->movement_start_time = 0;
-    mydata->can_move = 0;
-    mydata->last_movement_check = 0;
-    mydata->intent_backoff_until = 0;
+
+    // 补位链
+    initialize_chain_system(29);
 
     mydata->path_point_index = 0;
     init_move_history();
@@ -848,6 +844,8 @@ void loop()
         case PLAN_MOVEMENT:
             planMovementState_distributed();
             break;
+        case WAITTING:
+            waitting_distributed();
         case MOVE_TO_SHAPE:
             moveToShapeState_distributed();
             break;

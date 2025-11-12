@@ -61,6 +61,7 @@ enum BOTSTATE {
     FAULTY, MOVE_TO_TARGET,
     // 新增状态
     FIND_SHAPE_POSITION,    // 寻找形状位置
+    WAITTING,
     MOVE_TO_SHAPE,          // 向形状移动
     PLAN_MOVEMENT,  
     CHAIN_RELOCATION,       // 链式补位
@@ -182,10 +183,11 @@ typedef struct {
     uint32_t target_intent_time;        // 目标意图时间
     uint8_t movement_priority;
 
-    struct Hex known_vacancy;           // 已知的空缺位置
-    uint32_t vacancy_timestamp;         // 空缺信息的时间戳
-    uint8_t has_relocation_intent;      // 是否有补位意图
-    struct Hex relocation_target; 
+    // ============ 新增跟随链相关字段 ============
+    uint16_t leader_id;           // 邻居的领导者ID
+    uint16_t follower_id;         // 邻居的跟随者ID
+    uint8_t is_chain_leader;      // 邻居是否是链领导者
+    uint8_t chain_position;       // 邻居在链中的位置
 
 } Neighbor_t;
 
@@ -378,17 +380,20 @@ typedef struct
     int16_t intended_target_r;          // 意图移动的目标位置
     uint32_t target_intent_time;        // 目标意图时间
     
-    // 添加移动协调相关字段
-    uint8_t can_move;                    // 是否可以开始移动
-    uint32_t last_movement_check;        // 上次检查移动的时间
+     // ============ 新增跟随链相关字段 ============
+    uint16_t leader_id;           // 我的领导者ID
+    uint16_t follower_id;         // 我的跟随者ID
+    uint8_t is_chain_leader;      // 是否是链领导者
+    uint8_t chain_position;       // 在链中的位置 (0=领导者, 1=第一跟随者, 等)
 
-    // 分布式补位相关字段
-    struct Hex known_vacancy;           // 已知的空缺位置
-    uint32_t vacancy_timestamp;         // 空缺信息的时间戳
-    uint8_t has_relocation_intent;      // 是否有补位意图
-    struct Hex relocation_target;       // 补位目标位置
-    struct Hex relocation_source;       // 补位来源位置
-    uint32_t intent_backoff_until;
+    uint8_t should_follow_leader;       // 是否应该跟随领导者
+    uint32_t last_leader_update;        // 上次收到领导者位置更新的时间
+    int16_t leader_target_position_q;  // 领导者的目标位置
+    int16_t leader_target_position_r;  // 领导者的目标位置
+    int16_t leader_current_position_q; // 领导者当前位置
+    int16_t leader_current_position_r; // 领导者当前位置
+    uint8_t leader_is_moving;           // 领导者是否正在移动
+
 
 #endif
 
