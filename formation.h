@@ -131,6 +131,7 @@ typedef struct {
     double y;
 
     uint8_t angle_8;
+    uint8_t gradient_value;
     
     uint8_t receive_lock; //0 if receive completed
     uint8_t received_message_id; //the id of the current message

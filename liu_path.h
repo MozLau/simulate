@@ -9,7 +9,20 @@
 #include <kilombo.h>
 #include "formation.h"
 
+/* ---------- swarm ----------*/
+// 检查六边形位置是否在形状定义内
+bool is_position_in_shape(struct Hex pos) {
+    for (int i = 0; i < mydata->lattice_shape_size; i++) {
+        if (mydata->lattice_shape[i].q == pos.q && 
+            mydata->lattice_shape[i].r == pos.r) {
+            return true;
+        }
+    }
+    return false;
+}
+
 /* ---------辅助函数-------- */
+
 
 uint16_t calculate_follower_id(uint16_t robot_id, uint16_t total_robots) {
     uint16_t group_count = 6;

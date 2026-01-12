@@ -4,8 +4,8 @@
       "ID": 0,
       "direction": 2.6179938316345215,
       "state": {},
-      "x_position": -149.8499998007224,
-      "y_position": -5.4559598049030491
+      "x_position": -114.4999975643849,
+      "y_position": -66.683953171036976
     },
     {
       "ID": 1,
@@ -30,10 +30,10 @@
     },
     {
       "ID": 4,
-      "direction": 0.0,
+      "direction": 3.6651914119720459,
       "state": {},
-      "x_position": 51.0,
-      "y_position": 0.0
+      "x_position": 12.850001787288257,
+      "y_position": -66.077737840247636
     },
     {
       "ID": 5,
@@ -44,10 +44,10 @@
     },
     {
       "ID": 6,
-      "direction": 3.6651914119720459,
+      "direction": 0.0,
       "state": {},
-      "x_position": 151.07500009018429,
-      "y_position": -3.3341977809299266
+      "x_position": 153.0,
+      "y_position": 0.0
     },
     {
       "ID": 7,
@@ -204,5 +204,5 @@
       "y_position": 176.0
     }
   ],
-  "ticks": 155
+  "ticks": 465
 }

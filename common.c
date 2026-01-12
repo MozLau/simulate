@@ -5,7 +5,13 @@
 #include "liu_path.h"
 
 #define COLINEAR_THRESHOLD 0.01
-extern uint8_t occupied;
+
+/* -------- swarm ----------*/
+
+
+
+
+
 //////////////////////localization////////////////////////
 int check_localizablitiy()
 {
