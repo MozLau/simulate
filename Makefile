@@ -4,7 +4,7 @@
 # configured below, these needs to be adapted to the system.
 
 #list of c files in this project
-SOURCES=formation.c
+SOURCES=formation.c liu_path.c 
 
 #name of the executable file
 EXECUTABLE=formation

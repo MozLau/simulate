@@ -274,8 +274,8 @@ void purgeNeighbors(void)
             mydata->neighbors[i].timestamp = 0;
             mydata->neighbors[i].is_moving = 0;
             mydata->neighbors[i].has_movement_intent = 0;
-            mydata->neighbors[i].known_vacancy = (struct Hex){99,99};
-            mydata->neighbors[i].vacancy_timestamp = 0;
+
+    
             mydata->neighbors[i].target_intent_time = 0;
         }
 }
@@ -348,13 +348,6 @@ void setup_message(void)
         mydata->transmit_msg.data[44] = mydata->shape_position_occupied;
         mydata->transmit_msg.data[45] = mydata->movement_priority;
 
-        mydata->transmit_msg.data[46] = mydata->known_vacancy.q;
-        mydata->transmit_msg.data[47] = mydata->known_vacancy.r;
-        mydata->transmit_msg.data[48] = mydata->vacancy_timestamp & 0xFF;
-        mydata->transmit_msg.data[49] = (mydata->vacancy_timestamp >> 8) & 0xFF;
-        mydata->transmit_msg.data[50] = mydata->has_relocation_intent;
-        mydata->transmit_msg.data[51] = mydata->relocation_target.q;
-        mydata->transmit_msg.data[52] = mydata->relocation_target.r;
      
         //2 bytes for message crc
         mydata->transmit_msg.crc = message_crc(&mydata->transmit_msg);
