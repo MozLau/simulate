@@ -4,7 +4,7 @@
 # configured below, these needs to be adapted to the system.
 
 #list of c files in this project
-SOURCES=formation.c liu_path.c 
+SOURCES=formation.c liu_path.c
 
 #name of the executable file
 EXECUTABLE=formation
@@ -23,7 +23,7 @@ SIMHEADERS=/usr/local/include
 KILOLIB    =$(KILOHEADERS)/build/kilolib.a
 
 #compilation flags for simulated version
-SIM_CFLAGS = -c -g -O2 -Wall -std=c99  #-I$(KILOHEADERS)
+SIM_CFLAGS = -c -g -O2 -std=c99 -w#-Wall   #-I$(KILOHEADERS)
 
 #linking flags for simulated version
 SIM_LFLAGS = -lsim -lSDL -lm -ljansson

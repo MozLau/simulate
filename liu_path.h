@@ -6,7 +6,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <math.h>
-#include <kilombo.h>
+//#include <kilombo.h>
 #include "formation.h"
 
 /* ---------- swarm ----------*/
@@ -20,15 +20,11 @@ uint16_t calculate_follower_id(uint16_t robot_id, uint16_t total_robots);
 
 uint16_t calculate_leader_id(uint16_t robot_id, uint16_t total_robots);
 
-void initialize_chain_system(uint16_t total_robots);
-
 // 快速从笛卡尔坐标获取六边形坐标
 struct Hex get_hex_from_cartesian(float x, float y);
 
 bool should_start_finding_now();
 
-// 检查六边形位置是否在形状定义内
-bool is_position_in_shape(struct Hex pos);
 
 //  检查位置是否被邻居占据
 bool is_position_occupied_by_neighbor(struct Hex target);
@@ -47,28 +43,9 @@ double hex_distance(int q1, int r1, int q2, int r2);
 
 
 /* ---------------------------- 补位 ---------------------------- */
-// 当机器人移动到形状位置时，发布空缺信息
-void publish_vacancy_after_movement(struct Hex old_position);
-
-// 检查是否可以开始补位
-bool can_proceed_with_relocation();
 
 // 考虑消息延迟
 bool can_safely_start_movement();
-
-// 检查是否有可补位的空缺
-bool has_relocation_opportunity();
-
-// 检查补位机会（分布式版本）
-void checkChainRelocationOpportunity_distributed();
-
-
-
-void chainRelocationState_distributed();
-
-// 开始补位
-void start_relocation();
-
 
 
 /* --------移动阶段------------ */
@@ -121,12 +98,6 @@ bool is_robot_in_shape(int q, int r);
 bool is_position_empty_and_available(int q, int r);
 
 
-// 检查是否有可用的空位
-
-// 检查是否有可用的空位（分布式版本）
-bool has_available_vacancies();
-
-
 // 检查是否可以开始查找（更宽松的条件）
 bool can_start_finding_enhanced();
 
@@ -168,9 +139,6 @@ void track_leader();
 
 // 检查是否应该开始跟随领导者移动
 bool should_follow_leader_movement();
-
-// 链式跟随状态
-void chainFollowingState();
 
 #if 1
 void findShapePositionState_distributed();

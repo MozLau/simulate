@@ -10,7 +10,7 @@
 
 #include <math.h>
 
-#include <kilombo.h>
+//#include <kilombo.h>
 
 #include <stdbool.h>
 #include "shape.c"
@@ -44,6 +44,9 @@ extern uint8_t is_occupied[200][200];
 extern bool should_move_to_shape;
 
 #endif
+
+
+REGISTER_USERDATA(MyUserdata);
 
 
 
@@ -184,11 +187,6 @@ void process_message()
 
                 mydata->neighbors[i].movement_priority = data[45];
 
-                mydata->neighbors[i].leader_id = data[46];
-                mydata->neighbors[i].follower_id = data[47];
-                mydata->neighbors[i].is_chain_leader = data[48];
-                mydata->neighbors[i].chain_position = data[49];
-
 
                 return;
             }
@@ -250,11 +248,6 @@ void process_message()
         mydata->neighbors[i].shape_position_occupied = data[44];
 
         mydata->neighbors[i].movement_priority = data[45];
-
-        mydata->neighbors[i].leader_id = data[46];
-        mydata->neighbors[i].follower_id = data[47];
-        mydata->neighbors[i].is_chain_leader = data[48];
-        mydata->neighbors[i].chain_position = data[49];
 
 }
 
@@ -522,8 +515,6 @@ void setup()
     mydata->movement_priority = 0;
     mydata->target_intent_time = 0;
 
-    // 补位链
-    initialize_chain_system(29);
 
     mydata->path_point_index = 0;
     init_move_history();
@@ -806,8 +797,6 @@ void loop()
 
     set_color(colorNum[kilo_uid % 9 + 1]);
 
-    checkChainRelocationOpportunity_distributed();
-
         
     
     switch(get_bot_state()) {
@@ -841,9 +830,6 @@ void loop()
             waitting_distributed();
         case MOVE_TO_SHAPE:
             moveToShapeState_distributed();
-            break;
-        case CHAIN_RELOCATION:
-            chainRelocationState_distributed();
             break;
     }
     
