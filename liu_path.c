@@ -742,7 +742,7 @@ bool is_target_still_available(struct Hex target) {
 
 
 #if 1
-void findShapePositionState_distributed() {
+void findShapePosition() {
     
     // 第一阶段：选择目标并声明意图
     // 还没有选择过
@@ -754,7 +754,7 @@ void findShapePositionState_distributed() {
         mydata->has_movement_intent = 1;
         mydata->intended_target_q = selected_target.q;
         mydata->intended_target_r = selected_target.r;
-        
+        set_bot_state(CLAIM_TARGET);
         printf("第 %lu 次 --- Robot %d: 声明目标意图 (%d,%d)\n", kilo_ticks, kilo_uid, selected_target.q, selected_target.r);
     } else {
         // 没有找到合适目标
@@ -762,10 +762,10 @@ void findShapePositionState_distributed() {
         set_bot_state(IDLE);
         return;
     }
+}
 
-    
-    // 第二阶段：等待目标确认
-    if (mydata->has_movement_intent) {
+void claimTarget(){
+
         struct Hex current_target = (struct Hex){99,99};
         current_target.q = mydata->intended_target_q;
         current_target.r = mydata->intended_target_r;
@@ -774,13 +774,10 @@ void findShapePositionState_distributed() {
                 !verify_target_availability(current_target )) {
             printf("Robot %d: 目标 (%d,%d) 已被占用，重新选择\n", 
                    kilo_uid, current_target.q, current_target.r);
-            mydata->has_movement_intent = 0;
             mydata->intended_target_q = 99;
             mydata->intended_target_r = 99;
             return;
         }
-        
-    }
 }
 #else
 void findShapePositionState_distributed() {
