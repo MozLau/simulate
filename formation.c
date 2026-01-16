@@ -173,7 +173,6 @@ void process_message()
                 mydata->neighbors[i].has_movement_intent = data[29];
                 mydata->neighbors[i].intended_target_q = data[30] | (data[31] << 8);
                 mydata->neighbors[i].intended_target_r = data[32] | (data[33] << 8);
-                mydata->neighbors[i].target_intent_time = data[34] | (data[35] << 8);
 
                 mydata->neighbors[i].idle_ribbon_my_turn = data[36];
                 mydata->neighbors[i].stage1complete = data[37];
@@ -235,7 +234,7 @@ void process_message()
         mydata->neighbors[i].has_movement_intent = data[29];
         mydata->neighbors[i].intended_target_q = data[30] | (data[31] << 8);
         mydata->neighbors[i].intended_target_r = data[32] | (data[33] << 8);
-        mydata->neighbors[i].target_intent_time = data[34] | (data[35] << 8);
+
 
         mydata->neighbors[i].idle_ribbon_my_turn = data[36];
         mydata->neighbors[i].stage1complete = data[37];
@@ -268,8 +267,6 @@ void purgeNeighbors(void)
             mydata->neighbors[i].is_moving = 0;
             mydata->neighbors[i].has_movement_intent = 0;
 
-    
-            mydata->neighbors[i].target_intent_time = 0;
         }
 }
 
@@ -326,8 +323,6 @@ void setup_message(void)
         mydata->transmit_msg.data[31] = (int16_t)mydata->intended_target_q >> 8;
         mydata->transmit_msg.data[32] = (int16_t)mydata->intended_target_r  & 0xff;
         mydata->transmit_msg.data[33] = (int16_t)mydata->intended_target_r >> 8;
-        mydata->transmit_msg.data[34] = mydata->target_intent_time & 0xFF;
-        mydata->transmit_msg.data[35] = (mydata->target_intent_time >> 8) & 0xFF;
 
 
         mydata->transmit_msg.data[38] = (int16_t) mydata->hex_q  & 0xff;     // low 
@@ -513,7 +508,6 @@ void setup()
     mydata->intended_target_q =  99;
     mydata->intended_target_r =  99;
     mydata->movement_priority = 0;
-    mydata->target_intent_time = 0;
 
 
     mydata->path_point_index = 0;
@@ -801,12 +795,7 @@ void loop()
     
     switch(get_bot_state()) {
         case IDLE: 
-            if (can_start_finding_enhanced() && is_adjacent_to_boundary((struct Hex){mydata->hex_q,mydata->hex_r})){
                 set_bot_state(FIND_SHAPE_POSITION);
-
-                //printf("Robot %d: 🎯 Starting to find shape position\n", kilo_uid);
-            }
-
             break;
         case MOVE_OUT: 
             //moveOutState(); 

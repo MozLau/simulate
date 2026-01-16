@@ -181,7 +181,6 @@ typedef struct {
     uint8_t has_movement_intent;
     int16_t intended_target_q;
     int16_t intended_target_r;
-    uint32_t target_intent_time;        // 目标意图时间
     uint8_t movement_priority;
 
 } Neighbor_t;
@@ -361,28 +360,16 @@ typedef struct
     struct Hex original_position;
     uint8_t target_shape_index;
     MoveHistoryTracker move_tracker;
-    uint32_t relocation_start_time;  // 开始补位的时间戳
-    uint32_t total_relocation_time;  // 累计补位时间
+
 
 #endif
 
 #if 1
     uint8_t is_moving;                    // 是否正在移动
     uint8_t movement_priority;           // 移动优先级（可用于解决冲突）
-    uint32_t movement_start_time;        // 移动开始时间
     uint8_t has_movement_intent;         // 是否有移动意图
     int16_t intended_target_q;
     int16_t intended_target_r;          // 意图移动的目标位置
-    uint32_t target_intent_time;        // 目标意图时间
-
-
-    uint8_t should_follow_leader;       // 是否应该跟随领导者
-    uint32_t last_leader_update;        // 上次收到领导者位置更新的时间
-    int16_t leader_target_position_q;  // 领导者的目标位置
-    int16_t leader_target_position_r;  // 领导者的目标位置
-    int16_t leader_current_position_q; // 领导者当前位置
-    int16_t leader_current_position_r; // 领导者当前位置
-    uint8_t leader_is_moving;           // 领导者是否正在移动
 
 
 #endif
@@ -391,6 +378,7 @@ typedef struct
 
 #if 0
 REGISTER_USERDATA(MyUserdata);
+
 
 #else
 extern MyUserdata *mydata;
