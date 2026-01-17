@@ -489,7 +489,6 @@ void setup()
  // 初始化当前机器人的六边形坐标
             mydata->hex_q = cur_hex.q;
             mydata->hex_r = cur_hex.r;
-    mydata->relocation_occupied = 0;
     mydata->shape_occupancy = (uint8_t*)malloc(mydata->lattice_shape_size * sizeof(uint8_t));
     for (int i = 0; i < mydata->lattice_shape_size; i++) {
         // 1. 初始化 shape_occupancy 数组
@@ -503,6 +502,7 @@ void setup()
 #endif
 
     // 初始化移动协调字段
+    mydata->claim_chance = 0;
     mydata->is_moving = 0;
     mydata->has_movement_intent = 0;
     mydata->intended_target_q =  99;
@@ -797,26 +797,19 @@ void loop()
         case IDLE: 
                 set_bot_state(FIND_SHAPE_POSITION);
             break;
-        case MOVE_OUT: 
-            //moveOutState(); 
-            break;
-        case MOVE_IN:
-            // 原有逻辑
-            break;
-        case STOP_IN:
-            // 原有逻辑  
-            break;
-        // ... 其他原有状态
-        
-        // 新增状态
         case FIND_SHAPE_POSITION:
-            findShapePositionState_distributed();
+            findShapePosition();
             break;
-        case PLAN_MOVEMENT:
-            planMovementState_distributed();
+        case CLAIM_TARGET:
+            if(mydata->claim_chance < 3){
+                mydata->claim_chance += 1;
+            }else{
+                mydata->claim_chance = 0;
+                set_bot_state(SOLVE_CONFLICT);
+            }
             break;
-        case WAITTING:
-            waitting_distributed();
+        case SOLVE_CONFLICT:
+            solveconflict();
         case MOVE_TO_SHAPE:
             moveToShapeState_distributed();
             break;

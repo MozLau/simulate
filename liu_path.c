@@ -722,20 +722,25 @@ bool is_target_still_available(struct Hex target) {
     }
     
     // 方法2：检查邻居是否正在移动到这个目标
+    /*
     if (is_target_claimed_by_neighbor(target.q, target.r)) {
         return false;
     }
+    */
     
     // 方法3：检查邻居是否已经占据这个位置
+    /*
     if (is_position_occupied_by_neighbor(target)) {
         return false;
     }
-    
+    */
+
+    /*
     // 检查是否在形状内
     if (!is_position_in_shape(target)) {
         return false;
     }
-    
+    */
     return true;
 }
 
@@ -760,7 +765,6 @@ void findShapePosition() {
         // 没有找到合适目标
         //printf("Robot %d: 没有找到合适目标\n", kilo_uid);
         set_bot_state(IDLE);
-        return;
     }
 }
 
@@ -855,6 +859,31 @@ void findShapePositionState_distributed() {
 #endif
 // 寻找形状位置状态
 
+// 解决冲突
+void solveconflict(){
+    /*
+    struct Hex current_target = (struct Hex){99,99};
+    current_target.q = mydata->intended_target_q;
+    current_target.r = mydata->intended_target_r;
+    // 检查目标是否仍然可用
+    if (!is_target_still_available(current_target) || 
+            !verify_target_availability(current_target )) {
+        printf("Robot %d: 目标 (%d,%d) 已被占用，重新选择\n", 
+                kilo_uid, current_target.q, current_target.r);
+        mydata->intended_target_q = 99;
+        mydata->intended_target_r = 99;
+        return;
+    }
+*/
+    struct Hex current_target = (struct Hex){99,99};
+    current_target.q = mydata->intended_target_q;
+    current_target.r = mydata->intended_target_r;
+    if(detect_immediate_conflict_enhanced(current_target.q,current_target.r)){
+        set_bot_state(FIND_SHAPE_POSITION);
+    }else{
+        set_bot_state(MOVE_TO_SHAPE);
+    }
+}
 
 // 简化的路径冲突检测
 bool is_path_conflict_simple(struct Cartesian my_pos, struct Cartesian my_target,
@@ -904,6 +933,7 @@ bool is_path_conflict_simple(struct Cartesian my_pos, struct Cartesian my_target
 
 /*-------功能：移动阶段 --------*/
 // 更精细的冲突检测
+// 冲突返回true
 bool detect_immediate_conflict_enhanced(int target_q, int target_r) {
     for (int i = 0; i < mydata->N_Neighbors; i++) {
         // 检查1：目标声明冲突
@@ -916,6 +946,7 @@ bool detect_immediate_conflict_enhanced(int target_q, int target_r) {
             }
         }
         
+        /*
         // 检查2：路径冲突（邻居也在向同一区域移动）
         struct Cartesian my_pos = {mydata->x, mydata->y};
         struct Cartesian target_pos = hex_to_Cart((struct Hex){target_q, target_r});
@@ -938,6 +969,7 @@ bool detect_immediate_conflict_enhanced(int target_q, int target_r) {
                    kilo_uid, mydata->neighbors[i].ID, dist);
             return true;
         }
+            */
     }
     return false;
 }
