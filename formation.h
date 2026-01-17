@@ -65,6 +65,9 @@ enum BOTSTATE {
     WAITTING,
     MOVE_TO_SHAPE,          // 向形状移动
     PLAN_MOVEMENT,  
+    CLAIM_TARGET,
+    SOLVE_CONFLICT
+
 };
 #endif
 enum FAULTTYPE {NIL, FOUT, FIN, FSUB};

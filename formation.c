@@ -811,7 +811,7 @@ void loop()
         case SOLVE_CONFLICT:
             solveconflict();
         case MOVE_TO_SHAPE:
-            moveToShapeState_distributed();
+            moveToShape();
             break;
     }
     

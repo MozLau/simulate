@@ -942,7 +942,7 @@ bool detect_immediate_conflict_enhanced(int target_q, int target_r) {
             mydata->neighbors[i].intended_target_r == target_r) {
             
             if (mydata->neighbors[i].ID < kilo_uid) {
-                return true; // 同时声明，邻居ID更小
+                return true;
             }
         }
         
@@ -1063,7 +1063,7 @@ void waitting_distributed(){
 }
 
 /* ---------- 移动 --------------*/
-void moveToShapeState_distributed() {
+void moveToShape() {
     static struct Hex current_target = {0, 0};
     current_target.q = mydata->target_q;
     current_target.r = mydata->target_r;

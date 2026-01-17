@@ -165,10 +165,11 @@ bool detect_immediate_conflict(int target_q, int target_r);
 void planMovementState_distributed();
 
 /* --------- 等待 ----------------*/
+void solveconflict();
 void waitting_distributed();
 
 /* ---------- 移动 --------------*/
-void moveToShapeState_distributed();
+void moveToShape();
 
 
 
