@@ -530,7 +530,7 @@ struct Hex find_farthest_unoccupied_target() {
     struct Hex best = {99, 99};
     double best_dist = 0;  // 改为0，找最大距离
 
-    const int COMM_RANGE = 2;
+    const int COMM_RANGE = 1;
     int self_q = mydata->hex_q;
     int self_r = mydata->hex_r;
 
