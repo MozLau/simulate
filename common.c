@@ -1035,9 +1035,6 @@ int omni_move_to_lattice(struct Hex *point) {
      * return 1 if reached the target lattice point
      */
 
-// printf("%d %d", (**point).q, (**point).r  );
-    
-
     float lattice_size = kilo_lattice_size;
     float dx =  lattice_size;   // Horizontal distance between lattice points
     float dy = sqrt(3.0f)/2.0f * lattice_size; 
@@ -1061,7 +1058,7 @@ int omni_move_to_lattice(struct Hex *point) {
         float epsilon = 0.5; // tolerance
         float distance = sqrt(pow(mydata->x - target_x,2) + pow(mydata->y - target_y,2));
         
-        //printf("当前位置(%d,%d),距离目标点 (%d,%d) %f, 当前的位置是(%0.1f,%0.1f)\n",mydata->hex_q,mydata->hex_r,point->q,point->r,distance,mydata->x,mydata->y);
+        printf("当前位置(%d,%d),距离目标点 (%d,%d) %f, 当前的位置是(%0.1f,%0.1f)\n",mydata->hex_q,mydata->hex_r,point->q,point->r,distance,mydata->x,mydata->y);
         
         if (distance > epsilon && distance > 15.0) {
             target_speed(OMNI_SPEED,0);

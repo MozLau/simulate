@@ -801,7 +801,8 @@ void loop()
             findShapePosition();
             break;
         case CLAIM_TARGET:
-            if(mydata->claim_chance < 3){
+            claimTarget();
+            if(mydata->claim_chance < 10){
                 mydata->claim_chance += 1;
             }else{
                 mydata->claim_chance = 0;
@@ -810,6 +811,7 @@ void loop()
             break;
         case SOLVE_CONFLICT:
             solveconflict();
+            break;
         case MOVE_TO_SHAPE:
             moveToShape();
             break;

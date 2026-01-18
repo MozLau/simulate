@@ -156,7 +156,7 @@ bool is_path_conflict_simple(struct Cartesian my_pos, struct Cartesian my_target
 
 /*-------功能：移动阶段 --------*/
 // 更精细的冲突检测
-bool detect_immediate_conflict_enhanced(int target_q, int target_r);
+bool detect_immediate_conflict_enhanced();
 
 bool detect_immediate_conflict(int target_q, int target_r);
 

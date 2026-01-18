@@ -202,8 +202,8 @@ void prepare_for_movement(struct Hex target) {
 void finish_movement() {
     mydata->is_moving = 0;
     mydata->has_movement_intent = 0;
-    mydata->intended_target_q = 99;
-    mydata->intended_target_r = 99;
+    mydata->intended_target_q = 0;
+    mydata->intended_target_r = 0;
 }
 
 void init_move_history() {
@@ -614,7 +614,9 @@ struct Hex find_nearest_unoccupied_target_distributed() {
         }
     }
 
-    printf("第 %lu 次 ---Robot %d: 找到目标点 (%d, %d), 距离=%.1f\n", kilo_ticks, kilo_uid, best.q, best.r, best_dist);
+    if(best.q !=99 || best.r !=99){
+        //printf("第 %lu 次 ---Robot %d: 找到目标点 (%d, %d), 距离=%.1f\n", kilo_ticks, kilo_uid, best.q, best.r, best_dist);
+    }
     return best;
 }
 #if 0
@@ -769,7 +771,7 @@ void findShapePosition() {
 }
 
 void claimTarget(){
-
+#if 0
         struct Hex current_target = (struct Hex){99,99};
         current_target.q = mydata->intended_target_q;
         current_target.r = mydata->intended_target_r;
@@ -782,6 +784,9 @@ void claimTarget(){
             mydata->intended_target_r = 99;
             return;
         }
+            #else 
+printf("机器人 %d 在广播\n", kilo_uid);
+            #endif
 }
 #else
 void findShapePositionState_distributed() {
@@ -875,12 +880,16 @@ void solveconflict(){
         return;
     }
 */
-    struct Hex current_target = (struct Hex){99,99};
-    current_target.q = mydata->intended_target_q;
-    current_target.r = mydata->intended_target_r;
-    if(detect_immediate_conflict_enhanced(current_target.q,current_target.r)){
-        set_bot_state(FIND_SHAPE_POSITION);
+
+    if(detect_immediate_conflict_enhanced()){
+        printf("冲突了\n");
+        mydata->intended_target_q = mydata->hex_q;
+        mydata->intended_target_r = mydata->hex_r;
+        set_bot_state(IDLE);
     }else{
+        mydata->target_q = mydata->intended_target_q;
+        mydata->target_r = mydata->intended_target_r;
+
         set_bot_state(MOVE_TO_SHAPE);
     }
 }
@@ -934,14 +943,18 @@ bool is_path_conflict_simple(struct Cartesian my_pos, struct Cartesian my_target
 /*-------功能：移动阶段 --------*/
 // 更精细的冲突检测
 // 冲突返回true
-bool detect_immediate_conflict_enhanced(int target_q, int target_r) {
+bool detect_immediate_conflict_enhanced() {
     for (int i = 0; i < mydata->N_Neighbors; i++) {
+        printf("当前机器人是 %d, 意图坐标是 {%d, %d}\n", kilo_uid, mydata->intended_target_q, mydata->intended_target_r);
+        printf("当前检查的机器人是 %d \n", mydata->neighbors[i].ID);
+         printf("他的意图坐标是 {%d， %d} \n", mydata->neighbors[i].intended_target_q,mydata->neighbors[i].intended_target_r);
         // 检查1：目标声明冲突
-        if (mydata->neighbors[i].has_movement_intent &&
-            mydata->neighbors[i].intended_target_q == target_q &&
-            mydata->neighbors[i].intended_target_r == target_r) {
-            
+        if (//mydata->neighbors[i].has_movement_intent &&
+            mydata->neighbors[i].intended_target_q == mydata->intended_target_q &&
+            mydata->neighbors[i].intended_target_r == mydata->intended_target_r) {
+        
             if (mydata->neighbors[i].ID < kilo_uid) {
+ 
                 return true;
             }
         }
@@ -1064,11 +1077,13 @@ void waitting_distributed(){
 
 /* ---------- 移动 --------------*/
 void moveToShape() {
+
     static struct Hex current_target = {0, 0};
     current_target.q = mydata->target_q;
     current_target.r = mydata->target_r;
 
     // === 1️⃣ 定期冲突检测 ===
+    #if 0
     if ((kilo_ticks % 20 == 0) && detect_immediate_conflict(mydata->target_q, mydata->target_r)) {
         printf("Robot %d ⚠️ 冲突检测触发，停止移动\n", kilo_uid);
         handle_movement_conflict((struct Hex){mydata->target_q, mydata->target_r});
@@ -1076,6 +1091,7 @@ void moveToShape() {
         set_bot_state(FIND_SHAPE_POSITION);
         return;
     }
+        #endif
     printf("机器人 %d 开始进入位置(%d,%d)\n", kilo_uid,mydata->target_q,mydata->target_r);
     // === 2️⃣ 执行移动 ===
     int result = omni_move_to_lattice(&current_target);
