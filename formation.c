@@ -709,6 +709,7 @@ char *botinfo(void)
 /////////////////////////////////////////The main loop////////////////////////////////////
 void loop()
 {
+    //mydata->localized = 0;
     check_relocation_chain_completion();
     // remove neighbors in the memory that is older than 2s
     purgeNeighbors();
@@ -748,13 +749,15 @@ void loop()
         // run localization only if there are at least three noncolinear neighbors
         if(mydata->localizable == 1) 
         {
-
+#if 0
             //non-stop localization
             if (mydata->localized == 0)
             {
                 global_localization();
             }
-
+#else
+global_localization();
+#endif
 
         }
 
