@@ -709,6 +709,7 @@ char *botinfo(void)
 /////////////////////////////////////////The main loop////////////////////////////////////
 void loop()
 {
+
     check_relocation_chain_completion();
     // remove neighbors in the memory that is older than 2s
     purgeNeighbors();
@@ -801,7 +802,6 @@ void loop()
                 #else
                 set_bot_state(FIND_SHAPE_POSITION);
                 should_move_to_shape = false;
-                printf("这里设-\n");
                 #endif
             }
 

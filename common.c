@@ -87,6 +87,8 @@ void global_localization()
         // Update positions
         mydata->x -= alpha * gradX;
         mydata->y -= alpha * gradY;
+
+        mydata->localized = 1;
     }
 
 }

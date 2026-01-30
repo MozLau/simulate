@@ -30,24 +30,24 @@
     },
     {
       "ID": 4,
-      "direction": 2.6123504638671875,
+      "direction": 0.0,
       "state": {},
-      "x_position": 54.285717010498047,
-      "y_position": -5.7142858505249023
+      "x_position": 51.0,
+      "y_position": 0.0
     },
     {
       "ID": 5,
       "direction": 0.0,
       "state": {},
-      "x_position": 74.285713195800781,
-      "y_position": -218.57142639160156
+      "x_position": 102.0,
+      "y_position": 0.0
     },
     {
       "ID": 6,
       "direction": 0.0,
       "state": {},
-      "x_position": 102.85714721679688,
-      "y_position": -177.14285278320312
+      "x_position": 153.0,
+      "y_position": 0.0
     },
     {
       "ID": 7,
@@ -81,8 +81,8 @@
       "ID": 11,
       "direction": 0.0,
       "state": {},
-      "x_position": 75.714286804199219,
-      "y_position": -50.0
+      "x_position": 76.0,
+      "y_position": 44.0
     },
     {
       "ID": 12,
@@ -204,5 +204,5 @@
       "y_position": 176.0
     }
   ],
-  "ticks": 155
+  "ticks": 1085
 }

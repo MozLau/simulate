@@ -792,7 +792,6 @@ void findShapePositionState() {
             set_bot_state(IDLE);
             printf("Robot %d: 没找到合适的，下一个找位置\n", kilo_uid);
             should_move_to_shape = true;
-            printf("这里设+\n");
             set_move_type(STOP);
             omni_stop();
         
@@ -985,7 +984,6 @@ void checkChainRelocationOpportunity(void) {
     set_bot_state(CHAIN_RELOCATION);
     mydata->relocation_start_time = kilo_ticks;
     should_move_to_shape = false;
-    printf("这里设-\n");
  
 }
 
@@ -1005,7 +1003,6 @@ void chainRelocationState() {
         current_shape_entry_robot = 0;
         clear_global_vacancy(); // 清除当前空缺
         should_move_to_shape = true;
-        printf("这里设+\n");
         printf("重置状态，开始新一轮\n");
         // 触发新的形状进入
         current_formation_phase = 0;
@@ -1125,7 +1122,6 @@ void check_relocation_chain_completion(void) {
         current_shape_entry_robot = 0;
         clear_global_vacancy(); // 清除当前空缺
         should_move_to_shape = true;
-        printf("这里设+\n");
 
         // 触发新的形状进入
         current_formation_phase = 0;
