@@ -130,6 +130,7 @@ typedef struct {
     
     uint16_t x_16;
     uint16_t y_16;
+
     double x;
     double y;
 
@@ -219,6 +220,9 @@ typedef struct
     uint16_t y_16;
     double y;
     uint8_t angle_8;
+
+    double pre_x;
+    double pre_y;
     
     uint8_t gradient_value;
     uint16_t edge_followee_id; //the id of the kilobot being followed about

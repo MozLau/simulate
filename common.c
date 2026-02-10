@@ -45,9 +45,11 @@ int check_localizablitiy()
             }
         }
 
+
         return 0;
     }
     else{
+
         return 0;
     }
 }
@@ -93,7 +95,12 @@ void global_localization()
         // Update positions
         mydata->x -= alpha * gradX;
         mydata->y -= alpha * gradY;
+
     }
+
+
+
+    mydata->localized = 1;
 
 }
 

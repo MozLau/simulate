@@ -727,7 +727,7 @@ char *botinfo(void)
 /////////////////////////////////////////The main loop////////////////////////////////////
 void loop()
 {
-
+    mydata->localized = 0;
     // remove neighbors in the memory that is older than 2s
     purgeNeighbors();
     
