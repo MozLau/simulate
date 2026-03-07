@@ -713,6 +713,8 @@ char *botinfo(void)
         
     }
 
+    p += sprintf (p, "intended_target_q: %d\n", mydata->intended_target_q);
+    p += sprintf (p, "intended_target_r: %d\n", mydata->intended_target_r);
     // struct Hex point1 = {mydata->hex_q, mydata->hex_r};
     // struct Hex point2 = {5,5};
     
@@ -727,7 +729,7 @@ char *botinfo(void)
 /////////////////////////////////////////The main loop////////////////////////////////////
 void loop()
 {
-    mydata->localized = 0;
+    //mydata->localized = 0;
     // remove neighbors in the memory that is older than 2s
     purgeNeighbors();
     
@@ -771,6 +773,9 @@ void loop()
             if (mydata->localized == 0)
             {
                 global_localization();
+                struct Hex cur_hex = cart_to_hex((struct Cartesian){mydata->x, mydata->y});
+                mydata->hex_q = cur_hex.q;
+                mydata->hex_r = cur_hex.r;
             }
 
 
@@ -794,8 +799,9 @@ void loop()
         
     
     switch(get_bot_state()) {
-        case IDLE: 
-                set_bot_state(FIND_SHAPE_POSITION);
+        case IDLE:    
+            set_bot_state(FIND_SHAPE_POSITION);
+
             break;
         case FIND_SHAPE_POSITION:
             findShapePosition();
@@ -816,10 +822,7 @@ void loop()
             moveToShape();
             break;
     }
-    
 
-    //if the robot is not localizable
-    //if(mydata->localizable == 0) omni_stop();
   
     //send message
     setup_message();

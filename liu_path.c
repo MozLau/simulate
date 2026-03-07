@@ -11,8 +11,9 @@
 // 检查六边形位置是否在形状定义内
 bool is_position_in_shape(struct Hex pos) {
     for (int i = 0; i < mydata->lattice_shape_size; i++) {
-        if (mydata->lattice_shape[i].q == pos.q && 
-            mydata->lattice_shape[i].r == pos.r) {
+        if ((mydata->lattice_shape[i].q == pos.q && 
+            mydata->lattice_shape[i].r == pos.r) || mydata->lattice_shape[i].q == pos.q - 3 && 
+            mydata->lattice_shape[i].r == pos.r + 5) {
             return true;
         }
     }
@@ -386,6 +387,14 @@ bool is_collision_imminent(struct Hex current_pos, struct Hex target_pos) {
     
     for (int i = 0; i < mydata->N_Neighbors; i++) {
         struct Hex neighbor_hex = {mydata->neighbors[i].hex_q, mydata->neighbors[i].hex_r};
+
+#if 0
+        printf("机器人 %d 目标六角(%d,%d)\n", kilo_uid,target_pos.q, target_pos.r);
+        printf("邻居六角(%d,%d)\n", neighbor_hex.q, neighbor_hex.r);
+#endif
+        if(target_pos.q == neighbor_hex.q && target_pos.r == neighbor_hex.r){
+            return true;
+        }
         struct Cartesian neighbor_cart = hex_to_Cart(neighbor_hex);
         
         float nx = neighbor_cart.x - current_cart.x;
@@ -563,6 +572,11 @@ bool verify_target_availability(struct Hex target) {
     return true;
 }
 
+struct NeighborInfo {
+    int q;
+    int r;
+};
+
 struct Hex find_nearest_unoccupied_target_distributed() {
     struct Hex best = {99, 99};
     double best_dist = INFINITY;
@@ -592,7 +606,7 @@ struct Hex find_nearest_unoccupied_target_distributed() {
             if (!is_position_in_shape((struct Hex){q,r})) continue;
 
             // 被占据，这个不能要，应该改为邻居是否选中
-            if (!is_position_empty_and_available(q, r)) continue;
+            //if (!is_position_empty_and_available(q, r)) continue;
 
             // 上一次的位置
             if (mydata->original_position.q == q && mydata->original_position.r == r) continue;
@@ -746,14 +760,8 @@ bool is_target_still_available(struct Hex target) {
     return true;
 }
 
-
-
-#if 1
 void findShapePosition() {
     
-    // 第一阶段：选择目标并声明意图
-    // 还没有选择过
-
     struct Hex selected_target = find_nearest_unoccupied_target_distributed();
     
     if (selected_target.q != 99 && selected_target.r != 99) {
@@ -762,10 +770,8 @@ void findShapePosition() {
         mydata->intended_target_q = selected_target.q;
         mydata->intended_target_r = selected_target.r;
         set_bot_state(CLAIM_TARGET);
-        printf("第 %lu 次 --- Robot %d: 声明目标意图 (%d,%d)\n", kilo_ticks, kilo_uid, selected_target.q, selected_target.r);
     } else {
         // 没有找到合适目标
-        //printf("Robot %d: 没有找到合适目标\n", kilo_uid);
         set_bot_state(IDLE);
     }
 }
@@ -785,84 +791,99 @@ void claimTarget(){
             return;
         }
             #else 
-printf("机器人 %d 在广播\n", kilo_uid);
-            #endif
-}
-#else
-void findShapePositionState_distributed() {
-    
-    printf("Robot %d: 在 FIND_SHAPE_POSITION 状态\n", kilo_uid);
-    
-    // 第一阶段：选择目标并声明意图
-    if (!mydata->has_movement_intent) {
-        struct Hex selected_target = find_nearest_unoccupied_target_distributed();
-        
-        if (selected_target.q != 99 && selected_target.r != 99) {
-            // 声明目标意图
-            mydata->has_movement_intent = 1;
-            mydata->intended_target_q = selected_target.q;
-            mydata->intended_target_r = selected_target.r;
-            mydata->target_intent_time = kilo_ticks;
-            
-            printf("Robot %d: ✅ 声明目标意图 (%d,%d)\n", kilo_uid, selected_target.q, selected_target.r);
-        } else {
-            // 没有找到合适目标，回到IDLE状态
-            printf("Robot %d: ❌ 没有找到合适目标，返回IDLE\n", kilo_uid);
+//printf("机器人 %d 在广播\n", kilo_uid);
+#endif
+    for (int i = 0; i < mydata->N_Neighbors; i++) {
+        struct Hex neighbor_hex = {mydata->neighbors[i].hex_q, mydata->neighbors[i].hex_r};
+
+        if(mydata->intended_target_q == neighbor_hex.q && mydata->intended_target_r == neighbor_hex.r){
             set_bot_state(IDLE);
-            return;
+            break;
         }
     }
+}
+
+// 路径交叉检测辅助函数
+bool do_segments_intersect(struct Cartesian p1, struct Cartesian p2, 
+                           struct Cartesian p3, struct Cartesian p4) {
     
-    // 第二阶段：等待目标确认
-    if (mydata->has_movement_intent) {
-        struct Hex current_target = (struct Hex){mydata->intended_target_q,mydata->intended_target_r};
-        
-        printf("Robot %d: 检查目标 (%d,%d) 可用性\n", kilo_uid, current_target.q, current_target.r);
-        
-        // 检查目标是否仍然可用
-        if (!is_target_still_available(current_target)) {
-            printf("Robot %d: ❌ 目标 (%d,%d) 已被占用，重新选择\n", 
-                   kilo_uid, current_target.q, current_target.r);
-            mydata->has_movement_intent = 0;
-            mydata->intended_target_q = 99;
-            mydata->intended_target_r = 99;
-            return;
-        }
-        
-        if (!verify_target_availability(current_target)) {
-            printf("Robot %d: ❌ 目标 (%d,%d) 验证失败，重新选择\n", 
-                   kilo_uid, current_target.q, current_target.r);
-            mydata->has_movement_intent = 0;
-            mydata->intended_target_q = 99;
-            mydata->intended_target_r = 99;
-            return;
-        }
-        
-        // 等待一段时间让意图传播并解决冲突
-        if (kilo_ticks - mydata->target_intent_time > 100) {
-            if (can_claim_target(current_target)) {
-                // 成功获得目标，开始移动准备
-                mydata->target_shape_index = find_shape_index(current_target);
-                mydata->target_q = current_target.q;
-                mydata->target_r = current_target.r;
-                
-                printf("Robot %d: 🚀 成功获得目标 (%d,%d)，准备移动\n", 
-                       kilo_uid, current_target.q, current_target.r);
-                
-                mydata->has_movement_intent = 0; // 清除目标意图
-                set_bot_state(MOVE_TO_SHAPE);
-            } else {
-                // 目标冲突，重新选择
-                printf("Robot %d: ⚠️ 目标冲突，重新选择\n", kilo_uid);
-                mydata->has_movement_intent = 0;
-                mydata->intended_target_q = 99;
-                mydata->intended_target_r = 99;
+    // 计算方向向量
+    float d1x = p2.x - p1.x;
+    float d1y = p2.y - p1.y;
+    float d2x = p4.x - p3.x;
+    float d2y = p4.y - p3.y;
+
+    // 计算叉积分母
+    float cross = d1x * d2y - d1y * d2x;
+
+    // 如果 cross 接近 0，说明两线段平行或共线。
+    // 在机器人路径中，完全共线且反向的情况较少，若共线通常视为安全或需特殊处理。
+    // 这里为了鲁棒性，如果平行直接返回 false (或者你可以改为检测重叠)
+    if (fabs(cross) < 1e-6) {
+        return false; 
+    }
+
+    // 计算交点参数 t 和 u
+    // P(t) = p1 + t * (p2 - p1)
+    // Q(u) = p3 + u * (p4 - p3)
+    float dx = p1.x - p3.x;
+    float dy = p1.y - p3.y;
+
+    float t = (dx * d2y - dy * d2x) / cross;
+    float u = (dx * d1y - dy * d1x) / cross;
+
+    // 如果 0 <= t <= 1 且 0 <= u <= 1，则线段在内部相交
+    // 我们稍微放宽一点范围 (例如 -0.1 到 1.1)，以处理端点刚好接触的情况
+    if (t >= 0.0 && t <= 1.0 && u >= 0.0 && u <= 1.0) {
+        return true;
+    }
+
+    return false;
+}
+
+bool detect_immediate_conflict_enhanced() {
+    struct Hex my_start_hex = {mydata->hex_q, mydata->hex_r};
+    struct Hex my_target_hex = {mydata->intended_target_q, mydata->intended_target_r};
+
+    struct Cartesian my_start_position = hex_to_Cart(my_start_hex);
+    struct Cartesian my_target_position = hex_to_Cart(my_target_hex);
+
+    for (int i = 0; i < mydata->N_Neighbors; i++) {
+
+        if(mydata->neighbors[i].has_movement_intent == 1){
+            if (mydata->neighbors[i].ID < kilo_uid) {
+ 
+                return true;
             }
         }
+
+        if (mydata->neighbors[i].intended_target_q == mydata->intended_target_q &&
+            mydata->neighbors[i].intended_target_r == mydata->intended_target_r) {
+        
+            if (mydata->neighbors[i].ID < kilo_uid) {
+ 
+                return true;
+            }
+        }else{
+            struct Hex n_start_hex = {mydata->neighbors[i].hex_q, mydata->neighbors[i].hex_r};
+            struct Hex n_target_hex = {mydata->neighbors[i].intended_target_q, mydata->neighbors[i].intended_target_r};
+
+            struct Cartesian n_start_position = hex_to_Cart(my_start_hex);
+            struct Cartesian n_target_position = hex_to_Cart(my_target_hex);
+
+            if (do_segments_intersect(my_start_position, my_target_position, n_start_position, n_target_position)) {
+                //printf("当前机器人 %d 位置 (%d,%d) 目标  (%d,%d) 与机器人  %d 位置  (%d,%d) 目标  (%d,%d)路径冲突\n",);
+                printf("当前机器人 %d 与机器人  %d 路径冲突\n", kilo_uid, mydata->neighbors[i].ID);
+                if (mydata->neighbors[i].ID < kilo_uid) {
+ 
+                return true;
+            }
+            }
+        }
+
     }
+    return false;
 }
-#endif
-// 寻找形状位置状态
 
 // 解决冲突
 void solveconflict(){
@@ -882,9 +903,10 @@ void solveconflict(){
 */
 
     if(detect_immediate_conflict_enhanced()){
-        printf("冲突了\n");
+        //printf("冲突了\n");
         mydata->intended_target_q = mydata->hex_q;
         mydata->intended_target_r = mydata->hex_r;
+        mydata->has_movement_intent = 0;
         set_bot_state(IDLE);
     }else{
         mydata->target_q = mydata->intended_target_q;
@@ -941,13 +963,15 @@ bool is_path_conflict_simple(struct Cartesian my_pos, struct Cartesian my_target
 }
 
 /*-------功能：移动阶段 --------*/
+
 // 更精细的冲突检测
 // 冲突返回true
+#if 0
 bool detect_immediate_conflict_enhanced() {
     for (int i = 0; i < mydata->N_Neighbors; i++) {
-        printf("当前机器人是 %d, 意图坐标是 {%d, %d}\n", kilo_uid, mydata->intended_target_q, mydata->intended_target_r);
-        printf("当前检查的机器人是 %d \n", mydata->neighbors[i].ID);
-         printf("他的意图坐标是 {%d， %d} \n", mydata->neighbors[i].intended_target_q,mydata->neighbors[i].intended_target_r);
+        //printf("当前机器人是 %d, 意图坐标是 {%d, %d}\n", kilo_uid, mydata->intended_target_q, mydata->intended_target_r);
+        //printf("当前检查的机器人是 %d \n", mydata->neighbors[i].ID);
+         //printf("他的意图坐标是 {%d， %d} \n", mydata->neighbors[i].intended_target_q,mydata->neighbors[i].intended_target_r);
         // 检查1：目标声明冲突
         if (//mydata->neighbors[i].has_movement_intent &&
             mydata->neighbors[i].intended_target_q == mydata->intended_target_q &&
@@ -986,83 +1010,11 @@ bool detect_immediate_conflict_enhanced() {
     }
     return false;
 }
+#endif
 
-bool detect_immediate_conflict(int target_q, int target_r) {
-    for (int i = 0; i < mydata->N_Neighbors; i++) {
-        // 如果邻居也声明要移动到同一个目标
-        if (mydata->neighbors[i].has_movement_intent &&
-            mydata->neighbors[i].intended_target_q == target_q &&
-            mydata->neighbors[i].intended_target_r == target_r) {
-            
-            // 基于ID解决冲突
-            if (mydata->neighbors[i].ID < kilo_uid) {
-                return true; // 冲突，对方优先级更高
-            }
-        }
-        
-        // 如果邻居物理上已经很接近目标
-        struct Cartesian target_cart = hex_to_Cart((struct Hex){target_q, target_r});
-        double dist = sqrt(pow(target_cart.x - mydata->neighbors[i].x, 2) + 
-                          pow(target_cart.y - mydata->neighbors[i].y, 2));
-        
-        if (dist < kilo_lattice_size * 0.5) { // 50% 的格子大小
-            printf("Robot %d: 检测到物理冲突，邻居 %d 距离目标 %.1f mm\n", 
-                   kilo_uid, mydata->neighbors[i].ID, dist);
-            return true;
-        }
-    }
-    return false;
-}
-
-// 向形状移动状态
-
-void planMovementState_distributed() {
-    static struct Hex target;
-    
-    // === 0️⃣ 初始化目标 ===
-    target.q = mydata->target_q;
-    target.r = mydata->target_r;
-
-
-    // === 3️⃣ 宣告移动意图 ===
-    if (!mydata->has_movement_intent) {
-        mydata->has_movement_intent = 1;
-        mydata->intended_target_q = target.q;
-        mydata->intended_target_r = target.r;
-        printf("Robot %d: 📡 宣告移动意图 (%d,%d)\n", kilo_uid, target.q, target.r);
-        return;
-    }
-
-
-    // === 5️⃣ 局部并发上限 ===
-    int moving_count = 0;
-    for (int i = 0; i < mydata->N_Neighbors; i++) {
-        if (mydata->neighbors[i].is_moving) moving_count++;
-    }
-    if (moving_count >= 2) {
-        // 太多人动，重新 backoff
-        mydata->has_movement_intent = 0;
-        return;
-    }
-
-    // === 6️⃣ 最终检查是否安全启动 ===
-    if (can_claim_target(target) && can_safely_move_enhanced()) {
-        mydata->is_moving = 1;
-        mydata->has_movement_intent = 0;
-        printf("Robot %d: ✅ 确认安全，进入移动阶段 (%d,%d)\n",
-               kilo_uid, target.q, target.r);
-        set_bot_state(MOVE_TO_SHAPE);
-    } else {
-        // 无法启动则重试
-        printf("Robot %d: ❌ 条件不符，重新规划\n", kilo_uid);
-        mydata->has_movement_intent = 0;
-        set_bot_state(FIND_SHAPE_POSITION);
-    }
-}
 
 /* --------- 等待 ----------------*/
 void waitting_distributed(){
-    // 检查邻居移动状态
 
     for (int i = 0; i < mydata->N_Neighbors; i++) {
         // 检查是否有邻居正在移动
@@ -1092,10 +1044,11 @@ void moveToShape() {
         return;
     }
         #endif
-    printf("机器人 %d 开始进入位置(%d,%d)\n", kilo_uid,mydata->target_q,mydata->target_r);
+    //printf("机器人 %d 开始进入位置(%d,%d)\n", kilo_uid,mydata->target_q,mydata->target_r);
     // === 2️⃣ 执行移动 ===
     int result = omni_move_to_lattice(&current_target);
 
+#if 0
     if (result) {
         if (current_target.q != mydata->target_q || current_target.r != mydata->target_r) {
             global_localization();
@@ -1122,5 +1075,35 @@ void moveToShape() {
             set_bot_state(IDLE);
         }
     }
+#else
+    if (result) {
+        // === 3️⃣ 到达最终目标 ===
+            finish_movement();
+            struct Hex old_pos = mydata->original_position;
+            record_move(current_target);
+
+            global_localization();
+            struct Hex cur_hex = cart_to_hex((struct Cartesian){mydata->x, mydata->y});
+            mydata->hex_q = cur_hex.q;
+            mydata->hex_r = cur_hex.r;
+            mydata->original_position = cur_hex;
+            mydata->shape_position_occupied = 1;
+
+            printf("Robot %d: 🎯 到达目标 (%d,%d)，发布空位\n", kilo_uid, cur_hex.q, cur_hex.r);
+
+
+            set_bot_state(IDLE);
+    }
+    else{
+        global_localization();
+#if 0
+        struct Hex cur_hex = cart_to_hex((struct Cartesian){mydata->x, mydata->y});
+        mydata->hex_q = cur_hex.q;
+        mydata->hex_r = cur_hex.r;
+        printf("Robot %d: 到达中间点 (%d,%d)\n", kilo_uid, cur_hex.q, cur_hex.r);
+#endif
+ 
+    }
+#endif
 
 }

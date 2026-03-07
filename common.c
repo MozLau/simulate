@@ -1065,7 +1065,7 @@ int omni_move_to_lattice(struct Hex *point) {
         float epsilon = 0.5; // tolerance
         float distance = sqrt(pow(mydata->x - target_x,2) + pow(mydata->y - target_y,2));
         
-        printf("当前位置(%d,%d),距离目标点 (%d,%d) %f, 当前的位置是(%0.1f,%0.1f)\n",mydata->hex_q,mydata->hex_r,point->q,point->r,distance,mydata->x,mydata->y);
+        //printf("当前位置(%d,%d),距离目标点 (%d,%d) %f, 当前的位置是(%0.1f,%0.1f)\n",mydata->hex_q,mydata->hex_r,point->q,point->r,distance,mydata->x,mydata->y);
         
         if (distance > epsilon && distance > 15.0) {
             target_speed(OMNI_SPEED,0);
@@ -1086,7 +1086,7 @@ int omni_move_to_lattice(struct Hex *point) {
 
     return 0;
 }
-    #else
+#else
 int omni_move_to_lattice(struct Hex *point) {
     static bool turning_complete = false;
     static float target_x = 0, target_y = 0;
