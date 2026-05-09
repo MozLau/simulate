@@ -362,7 +362,6 @@ typedef struct
 #if 1 
     uint8_t *shape_occupancy;           // 形状位置占用状态数组
     uint8_t shape_position_occupied;    // 是否占据形状
-    struct Hex o_original_position;
     struct Hex original_position;
     uint8_t target_shape_index;
     MoveHistoryTracker move_tracker;

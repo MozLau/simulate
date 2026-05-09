@@ -65,9 +65,11 @@ message_t *message_tx()
     if (mydata->message_lock)
         return 0;
     
+    #if 0
     if (mydata->gradient_value == UINT8_MAX)
         return 0;
-    
+    #endif
+
     return &mydata->transmit_msg;
 }
 
@@ -228,9 +230,6 @@ void process_message()
         mydata->neighbors[i].r_bot_type = data[23];
         mydata->neighbors[i].ribbon_my_turn = data[24];
 
-
-
-        mydata->neighbors[i].is_moving = data[28];
         mydata->neighbors[i].has_movement_intent = data[29];
         mydata->neighbors[i].intended_target_q = data[30] | (data[31] << 8);
         mydata->neighbors[i].intended_target_r = data[32] | (data[33] << 8);
@@ -242,11 +241,9 @@ void process_message()
         mydata->neighbors[i].hex_q = data[38] | (data[39] << 8);
         mydata->neighbors[i].hex_r = data[40] | (data[41] << 8);
 
-        mydata->neighbors[i].sum_of_bots_in_hole = data[42] | (data[43] << 8);
         
         mydata->neighbors[i].shape_position_occupied = data[44];
 
-        mydata->neighbors[i].movement_priority = data[45];
 
 }
 
@@ -263,10 +260,6 @@ void purgeNeighbors(void)
             mydata->neighbors[i] = mydata->neighbors[mydata->N_Neighbors-1];
             //replace it by the last entry
             mydata->N_Neighbors--;
-            mydata->neighbors[i].timestamp = 0;
-            mydata->neighbors[i].is_moving = 0;
-            mydata->neighbors[i].has_movement_intent = 0;
-
         }
 }
 
@@ -317,7 +310,6 @@ void setup_message(void)
         //edge-following info
         mydata->transmit_msg.data[25] = mydata->N_followed;
 
-        mydata->transmit_msg.data[28] = mydata->is_moving;
         mydata->transmit_msg.data[29] = mydata->has_movement_intent;
         mydata->transmit_msg.data[30] = (int16_t)mydata->intended_target_q  & 0xff;
         mydata->transmit_msg.data[31] = (int16_t)mydata->intended_target_q >> 8;
@@ -330,11 +322,7 @@ void setup_message(void)
         mydata->transmit_msg.data[40] = (int16_t) mydata->hex_r & 0xff;     // low 
         mydata->transmit_msg.data[41] = (int16_t) mydata->hex_r >> 8;       // high 
 
-        mydata->transmit_msg.data[42] = mydata->sum_of_bots_in_hole & 0xff;     // low 
-        mydata->transmit_msg.data[43] = mydata->sum_of_bots_in_hole >> 8;       // high 
-
         mydata->transmit_msg.data[44] = mydata->shape_position_occupied;
-        mydata->transmit_msg.data[45] = mydata->movement_priority;
 
      
         //2 bytes for message crc
@@ -367,7 +355,6 @@ void setup()
     struct Hex cur_hex = cart_to_hex((struct Cartesian){kilo_x, kilo_y});
     mydata->hex_q = cur_hex.q;
     mydata->hex_r = cur_hex.r;
-    mydata->o_original_position = (struct Hex){mydata->hex_q,mydata->hex_r};
     mydata->original_position = (struct Hex){mydata->hex_q,mydata->hex_r};
     mydata->shape_position_occupied = 0;
 #endif
@@ -503,14 +490,10 @@ void setup()
 
     // 初始化移动协调字段
     mydata->claim_chance = 0;
-    mydata->is_moving = 0;
     mydata->has_movement_intent = 0;
     mydata->intended_target_q =  99;
     mydata->intended_target_r =  99;
-    mydata->movement_priority = 0;
 
-
-    mydata->path_point_index = 0;
     init_move_history();
     
     setup_message();
@@ -640,12 +623,13 @@ char *botinfo(void)
     p += sprintf (p, "Idle Ribbon %d, ON_ribbon_ID: %d \n", mydata->idle_ribbon_ID, mydata->idle_on_ribbon_ID);
     p += sprintf (p, "Is tail: %d\n", am_at_tail());
     p += sprintf (p, "My turn: %d\n", mydata->idle_ribbon_my_turn);
-
+#if 0
     p += sprintf (p, "\n--------------------------\n");
     p += sprintf (p, "Ribbon %d, ON_ribbon_ID: %d \n", mydata->ribbon_ID, mydata->on_ribbon_ID);
     p += sprintf (p, "ribbon_complete %d\n", mydata->ribbon_complete);
     p += sprintf (p, "N_not_in %d, N_not_in_ahead: %d \n", mydata->n_bot_not_in_shape, mydata->n_bot_not_in_shape_ahead);
-     //ribbon bot type
+#endif   
+    //ribbon bot type
     switch (mydata->r_bot_type)
     {
     case RECYCLE: p += sprintf (p, "Ribbon bot type: Recycle \n"); break;
@@ -693,10 +677,12 @@ char *botinfo(void)
     }
     
     p += sprintf (p, "\n");
+#if 0
     p += sprintf(p, "Passing: ");
     p += sprintf (p, "N_passing: %d \n", mydata->N_passing);
     p += sprintf (p, "N_passing_distinct: %d \n", countDistinct(mydata->passing_by_ID, mydata->N_passing));
     p += sprintf (p, "N_followed: %d \n", mydata->N_followed);
+#endif
     for (i = 0; i < mydata->N_passing; i++)
     {
         p += sprintf (p, "ID: %d ", mydata->passing_by_ID[i]);
@@ -709,10 +695,11 @@ char *botinfo(void)
     p += sprintf (p, "passingby_gradient: %d\n", mydata->N_passing_gradient);
     for (i = 0; i < 2; i++)
     {
-        p += sprintf (p, "ID: %d ", mydata->passingby_ID_gradient[i]);
+        p += sprintf (p, "ID: %d \n", mydata->passingby_ID_gradient[i]);
         
     }
 
+    p += sprintf (p, "movement_intent: %d\n", mydata->has_movement_intent);
     p += sprintf (p, "intended_target_q: %d\n", mydata->intended_target_q);
     p += sprintf (p, "intended_target_r: %d\n", mydata->intended_target_r);
     // struct Hex point1 = {mydata->hex_q, mydata->hex_r};
@@ -762,25 +749,56 @@ void loop()
 /*这个不能注释！更新位置*/  
    //Update x, y use localization
     #if (LOCALIZATION)
-
-        mydata->localizable =  check_localizablitiy();
+    #if 0
+        if(!is_position_in_shape((struct Hex){mydata->hex_q,mydata->hex_r})){
+            mydata->x = kilo_x;
+            mydata->y = kilo_y;
+            struct Hex cur_hex = cart_to_hex((struct Cartesian){mydata->x, mydata->y});
+                    mydata->hex_q = cur_hex.q;
+                    mydata->hex_r = cur_hex.r;
+        }else{
+            mydata->localizable =  check_localizablitiy();
 
         // run localization only if there are at least three noncolinear neighbors
-        if(mydata->localizable == 1) 
-        {
-
-            //non-stop localization
-            if (mydata->localized == 0)
+            if(mydata->localizable == 1) 
             {
-                global_localization();
-                struct Hex cur_hex = cart_to_hex((struct Cartesian){mydata->x, mydata->y});
-                mydata->hex_q = cur_hex.q;
-                mydata->hex_r = cur_hex.r;
+
+                //non-stop localization
+                if (mydata->localized == 0)
+                {
+                    global_localization();
+                    #if 0
+                    struct Hex cur_hex = cart_to_hex((struct Cartesian){mydata->x, mydata->y});
+                    mydata->hex_q = cur_hex.q;
+                    mydata->hex_r = cur_hex.r;
+                    #endif
+                }
+
+
             }
-
-
         }
 
+    #else
+         mydata->localizable =  check_localizablitiy();
+
+        // run localization only if there are at least three noncolinear neighbors
+            if(mydata->localizable == 1) 
+            {
+
+                //non-stop localization
+                if (mydata->localized == 0)
+                {
+                    global_localization();
+                    #if 0
+                    struct Hex cur_hex = cart_to_hex((struct Cartesian){mydata->x, mydata->y});
+                    mydata->hex_q = cur_hex.q;
+                    mydata->hex_r = cur_hex.r;
+                    #endif
+                }
+
+
+            }
+    #endif
     #else
         mydata->x = kilo_x;
         mydata->y = kilo_y;
@@ -801,10 +819,19 @@ void loop()
     switch(get_bot_state()) {
         case IDLE:    
             set_bot_state(FIND_SHAPE_POSITION);
-
             break;
         case FIND_SHAPE_POSITION:
             findShapePosition();
+            if(mydata->claim_chance < 10){
+                mydata->claim_chance += 1;
+            }else{
+                mydata->claim_chance = 0;
+                if(mydata->intended_target_q !=99 && mydata->intended_target_r != 99){
+                    set_bot_state(CLAIM_TARGET);
+                }else{
+                    set_bot_state(IDLE);
+                }
+            }
             break;
         case CLAIM_TARGET:
             claimTarget();
@@ -817,8 +844,19 @@ void loop()
             break;
         case SOLVE_CONFLICT:
             solveconflict();
+            if(mydata->claim_chance < 10){
+                mydata->claim_chance += 1;
+            }else{
+                mydata->claim_chance = 0;
+                set_bot_state(MOVE_TO_SHAPE);
+            }
             break;
         case MOVE_TO_SHAPE:
+#if 0
+            if(mydata->message_lock == 1){
+                break;
+            }
+#endif
             moveToShape();
             break;
     }

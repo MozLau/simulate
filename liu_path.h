@@ -53,12 +53,6 @@ bool can_safely_start_movement();
 // 解决移动冲突（基于ID的优先级）
 bool resolve_movement_conflict(uint16_t neighbor_id);
 
-// 检查是否可以安全移动
-bool can_safely_move();
-
-// 增加随机退避机制
-bool can_safely_move_enhanced();
-
 // 开始移动前的准备
 void prepare_for_movement(struct Hex target);
 
@@ -97,17 +91,10 @@ bool is_robot_in_shape(int q, int r);
 // 检查位置是否为空且可用
 bool is_position_empty_and_available(int q, int r);
 
-
-// 检查是否可以开始查找（更宽松的条件）
-bool can_start_finding_enhanced();
-
 // 第二阶段检查：是否可以开始移动（严格条件）
 bool can_start_moving();
 
 /* -------功能：寻找阶段---------*/
-
-// 检查目标是否已被邻居声明
-bool is_target_claimed_by_neighbor(int q, int r);
 
 // 在移动前进行最终验证
 bool verify_target_availability(struct Hex target);
@@ -116,9 +103,6 @@ struct Hex find_nearest_unoccupied_target_distributed();
 #if 0
 int find_optimal_shape_position_index();
 #endif
-
-// 检查是否可以声明目标
-bool can_claim_target(struct Hex target);
 
 // 找到形状索引
 int find_shape_index(struct Hex position);
@@ -150,15 +134,9 @@ void findShapePositionState_distributed();
 void findShapePositionState();
 #endif
 
-// 简化的路径冲突检测
-bool is_path_conflict_simple(struct Cartesian my_pos, struct Cartesian my_target,
-                            struct Cartesian neighbor_pos, struct Cartesian neighbor_target);
-
 /*-------功能：移动阶段 --------*/
 // 更精细的冲突检测
 bool detect_immediate_conflict_enhanced();
-
-bool detect_immediate_conflict(int target_q, int target_r);
 
 // 向形状移动状态
 
@@ -166,7 +144,6 @@ void planMovementState_distributed();
 
 /* --------- 等待 ----------------*/
 void solveconflict();
-void waitting_distributed();
 
 /* ---------- 移动 --------------*/
 void moveToShape();

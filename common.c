@@ -1068,13 +1068,14 @@ int omni_move_to_lattice(struct Hex *point) {
         //printf("当前位置(%d,%d),距离目标点 (%d,%d) %f, 当前的位置是(%0.1f,%0.1f)\n",mydata->hex_q,mydata->hex_r,point->q,point->r,distance,mydata->x,mydata->y);
         
         if (distance > epsilon && distance > 15.0) {
-            target_speed(OMNI_SPEED,0);
+            target_speed(OMNI_SPEED*0.5f,0);
 
             
         
         }else if(distance > epsilon && distance <= 15.0){
             //printf("当前速度是%0.5f\n",distance*0.5f);
-            target_speed(distance*0.5f,0); //slow down when approaching
+            //target_speed(distance*0.5f,0); //slow down when approaching
+            target_speed(distance*0.1f,0); //slow down when approaching
     
         }else{
             target_speed(0,0);
