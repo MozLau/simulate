@@ -835,7 +835,7 @@ void loop()
             break;
         case CLAIM_TARGET:
             claimTarget();
-            if(mydata->claim_chance < 10){
+            if(mydata->claim_chance < 30){
                 mydata->claim_chance += 1;
             }else{
                 mydata->claim_chance = 0;
@@ -844,7 +844,7 @@ void loop()
             break;
         case SOLVE_CONFLICT:
             solveconflict();
-            if(mydata->claim_chance < 10){
+            if(mydata->claim_chance < 2){
                 mydata->claim_chance += 1;
             }else{
                 mydata->claim_chance = 0;

@@ -910,6 +910,13 @@ void omni_stop()
     target_speed(0,0);
 }
 
+float angle_diff(float a, float b) {
+    float d = a - b;
+    while (d > M_PI) d -= 2.0f * M_PI;
+    while (d < -M_PI) d += 2.0f * M_PI;
+    return fabs(d);
+}
+
 void omni_move_to_nearest_lattice() {
     /*
      * Move the robot to the nearest lattice point in a hexagonal grid with a fixed turning rate and speed.
@@ -953,7 +960,8 @@ void omni_move_to_nearest_lattice() {
     turn_to(target_direction);
     target_speed(0,0);
 
-    if (fabs(kilo_direction - target_direction)<0.01)
+    //if (fabs(kilo_direction - target_direction)<0.01)
+    if (angle_diff(kilo_direction, target_direction) < 0.01f)
     {
         float epsilon = 0.5; // tolerance
         float distance = sqrt(pow(mydata->x - target_x,2) + pow(mydata->y - target_y,2));

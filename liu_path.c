@@ -281,6 +281,140 @@ int check_target_localizability(struct Hex start, struct Hex target)
     }
 }
 
+#define COMM_RANGE_PHYSICAL 120.0
+#define MAX_ANCHORS 32
+
+static int has_three_non_collinear_points(double x[], double y[], int cnt)
+{
+    if (cnt < 3)
+    {
+        return 0;
+    }
+
+    for (int i = 0; i < cnt; i++)
+    {
+        for (int j = i + 1; j < cnt; j++)
+        {
+            for (int k = j + 1; k < cnt; k++)
+            {
+                double dx1 = x[j] - x[i];
+                double dy1 = y[j] - y[i];
+
+                double dx2 = x[k] - x[i];
+                double dy2 = y[k] - y[i];
+
+                double cross = fabs(dx1 * dy2 - dx2 * dy1);
+
+                double tol = 0.01 * kilo_lattice_size * kilo_lattice_size * 0.25;
+
+                if (cross > tol)
+                {
+                    return 1;
+                }
+            }
+        }
+    }
+
+    return 0;
+}
+
+int check_leave_keeps_neighbors_localizable(struct Hex start, struct Hex target)
+{
+    struct Cartesian self_new_cart = hex_to_Cart(target);
+
+    double range2 = COMM_RANGE_PHYSICAL * COMM_RANGE_PHYSICAL;
+
+    /*
+     * 遍历当前机器人的邻居。
+     * 这些邻居是“可能会因为当前机器人离开而受到影响”的机器人。
+     */
+    for (int i = 0; i < mydata->N_Neighbors; i++)
+    {
+        /*
+         * 如果你的意思是：
+         * “已经定位的邻居不能因为我离开而失去定位条件”
+         * 就保留这个判断。
+         *
+         * 如果你的意思是：
+         * “所有邻居，不管当前是否 localized，都必须满足三点定位条件”
+         * 那么可以删除这个 if。
+         */
+        if (mydata->neighbors[i].localized != 1)
+        {
+            continue;
+        }
+
+        double px = mydata->neighbors[i].x;
+        double py = mydata->neighbors[i].y;
+
+        double anchor_x[MAX_ANCHORS];
+        double anchor_y[MAX_ANCHORS];
+        int cnt = 0;
+
+        /*
+         * 1. 把当前机器人移动到 target 后的新位置作为候选锚点
+         *
+         * 注意：
+         * 这里不是把当前机器人原来的 start 位置算进去，
+         * 而是把它的新位置 target 算进去。
+         */
+        double dx_self = self_new_cart.x - px;
+        double dy_self = self_new_cart.y - py;
+
+        if (dx_self * dx_self + dy_self * dy_self <= range2)
+        {
+            if (cnt < MAX_ANCHORS)
+            {
+                anchor_x[cnt] = self_new_cart.x;
+                anchor_y[cnt] = self_new_cart.y;
+                cnt++;
+            }
+        }
+
+        /*
+         * 2. 加入其他已经定位的邻居机器人作为锚点
+         */
+        for (int j = 0; j < mydata->N_Neighbors; j++)
+        {
+            /*
+             * 不能把被检查的这个邻居自己作为自己的定位参考点
+             */
+            if (j == i)
+            {
+                continue;
+            }
+
+            if (mydata->neighbors[j].localized != 1)
+            {
+                continue;
+            }
+
+            double dx = mydata->neighbors[j].x - px;
+            double dy = mydata->neighbors[j].y - py;
+
+            if (dx * dx + dy * dy <= range2)
+            {
+                if (cnt < MAX_ANCHORS)
+                {
+                    anchor_x[cnt] = mydata->neighbors[j].x;
+                    anchor_y[cnt] = mydata->neighbors[j].y;
+                    cnt++;
+                }
+            }
+        }
+
+        /*
+         * 3. 判断这个邻居是否仍然能由至少三个非共线锚点定位
+         */
+        if (!has_three_non_collinear_points(anchor_x, anchor_y, cnt))
+        {
+            return 0;
+        }
+    }
+
+    return 1;
+}
+
 /* ------ 避障 --------- */
 
 bool is_hex_occupied(struct Hex hex) {
@@ -512,6 +646,7 @@ struct NeighborInfo {
     int r;
 };
 
+#if 0
 struct Hex find_nearest_unoccupied_target_distributed() {
     struct Hex best = {99, 99};
     double best_dist = INFINITY;
@@ -556,8 +691,14 @@ struct Hex find_nearest_unoccupied_target_distributed() {
             // 中间空心点
             if ((q == -3 && r == 4) || (q == -2 && r == 4) || 
                 (q == -2 && r == 3) || (q == -1 && r == 3)) continue;
+
+            
+            struct Hex start = {self_q, self_r};
+            struct Hex target = {q, r};
      
-            if (!check_target_localizability((struct Hex){self_q, self_r}, (struct Hex){q, r})) continue;
+            if (!check_target_localizability(start, target)) continue;
+            if (!check_leave_keeps_neighbors_localizable(start, target)) continue;
+
 
             double dist = hex_distance(self_q, self_r, q, r);
             if (dist < best_dist) {
@@ -573,6 +714,98 @@ struct Hex find_nearest_unoccupied_target_distributed() {
     }
     return best;
 }
+#else
+struct Hex find_nearest_unoccupied_target_distributed() {
+    struct Hex invalid = {99, 99};
+
+    const int COMM_RANGE = 1;
+    const int MAX_CANDIDATES = 64;
+
+    int self_q = mydata->hex_q;
+    int self_r = mydata->hex_r;
+
+    struct Hex candidates[MAX_CANDIDATES];
+    int candidate_count = 0;
+
+    for (int dq = -COMM_RANGE; dq <= COMM_RANGE; dq++) {
+        for (int dr = -COMM_RANGE; dr <= COMM_RANGE; dr++) {
+            int q = self_q + dq;
+            int r = self_r + dr;
+
+            // 选中自己了
+            if (q == self_q && r == self_r) continue;
+
+            // 跳过超出六边形通信范围的点
+            if (hex_distance(self_q, self_r, q, r) > COMM_RANGE) continue;
+
+            // 往深处走
+            if (r < self_r) continue;
+
+            // 碰撞检测
+            if (is_collision_imminent((struct Hex){self_q, self_r}, 
+                                      (struct Hex){q, r})) continue;
+
+            // 形状区域判断
+            if (!is_position_in_shape((struct Hex){self_q, self_r}) &&
+                 is_position_in_shape((struct Hex){q, r})) {
+
+                // 允许从外部进入形状
+
+            } else if (is_position_in_shape((struct Hex){self_q, self_r})) {
+
+                if (!is_position_in_shape((struct Hex){q, r})) continue;
+
+            } else {
+
+                if (!is_out_position_in_shape((struct Hex){q, r})) continue;
+            }
+
+            // 上一次的位置
+            if (mydata->original_position.q == q &&
+                mydata->original_position.r == r) continue;
+
+            // 历史位置
+            if (is_position_in_history((struct Hex){q, r})) continue;
+
+            // 中间空心点
+            if ((q == -3 && r == 4) || (q == -2 && r == 4) ||
+                (q == -2 && r == 3) || (q == -1 && r == 3)) continue;
+
+            struct Hex start = {self_q, self_r};
+            struct Hex target = {q, r};
+
+            if (!check_target_localizability(start, target)) continue;
+
+            if (!check_leave_keeps_neighbors_localizable(start, target)) continue;
+
+            // 到这里说明这个点符合要求，加入候选集合
+            if (candidate_count < MAX_CANDIDATES) {
+                candidates[candidate_count].q = q;
+                candidates[candidate_count].r = r;
+                candidate_count++;
+            }
+        }
+    }
+
+    // 没有找到任何候选点
+    if (candidate_count == 0) {
+        return invalid;
+    }
+
+    // 从所有候选点中随机选一个
+    int idx = rand_hard() % candidate_count;
+
+    struct Hex selected = candidates[idx];
+
+    /*
+    printf("第 %lu 次 --- Robot %d: 随机选择目标点 (%d, %d), 候选数量=%d\n",
+           kilo_ticks, kilo_uid, selected.q, selected.r, candidate_count);
+    */
+
+    return selected;
+}
+#endif
+
 #if 0
 int find_optimal_shape_position_index() {
     #if 0
@@ -851,6 +1084,7 @@ void solveconflict(){
 /*-------功能：移动阶段 --------*/
 
 /* ---------- 移动 --------------*/
+#if 0
 void moveToShape() {
 
     static struct Hex current_target = {0, 0};
@@ -938,5 +1172,137 @@ void moveToShape() {
  
     }
 #endif
+}
+#else
+
+#if 0
+void moveToShape() {
+
+    static struct Hex current_target = {0, 0};
+    current_target.q = mydata->target_q;
+    current_target.r = mydata->target_r;
+
+    for (int i = 0; i < mydata->N_Neighbors; i++) {
+        if (mydata->neighbors[i].intended_target_q == mydata->intended_target_q &&
+                mydata->neighbors[i].intended_target_r == mydata->intended_target_r) {
+            
+                if (mydata->neighbors[i].ID < kilo_uid) {
+                    printf("当前机器人 %d 和邻居 %d 目标相同，放弃。\n", kilo_uid, mydata->neighbors[i].ID);
+                    mydata->intended_target_q = 99;
+                    mydata->intended_target_r = 99;
+                    mydata->has_movement_intent = 0;
+                    set_bot_state(IDLE);
+                    return;
+                }
+            }
+        }    
+
+
+    //printf("机器人 %d 开始进入位置(%d,%d)\n", kilo_uid,mydata->target_q,mydata->target_r);
+    // === 2️⃣ 执行移动 ===
+    int result = omni_move_to_lattice(&current_target);
+
+    if (result) {
+        // === 3️⃣ 到达最终目标 ===
+            finish_movement();
+            struct Hex old_pos = mydata->original_position;
+            record_move(current_target);
+
+            global_localization();
+            struct Hex cur_hex = cart_to_hex((struct Cartesian){mydata->x, mydata->y});
+            mydata->hex_q = cur_hex.q;
+            mydata->hex_r = cur_hex.r;
+            mydata->original_position = cur_hex;
+
+            set_bot_state(IDLE);
+    }
+    else{
+        global_localization();
+
+        struct Hex cur_hex = cart_to_hex((struct Cartesian){mydata->x, mydata->y});
+        mydata->hex_q = cur_hex.q;
+        mydata->hex_r = cur_hex.r;
+        //printf("Robot %d: 到达中间点 (%d,%d)\n", kilo_uid, cur_hex.q, cur_hex.r);
+
+ 
+    }
 
 }
+#else
+void moveToShape() {
+
+    if (mydata->intended_target_q == 99 ||
+        mydata->intended_target_r == 99) {
+        target_speed(0, 0);
+        mydata->has_movement_intent = 0;
+        set_bot_state(IDLE);
+        return;
+    }
+
+    struct Hex current_target;
+    current_target.q = mydata->intended_target_q;
+    current_target.r = mydata->intended_target_r;
+
+    for (int i = 0; i < mydata->N_Neighbors; i++) {
+
+        if (mydata->neighbors[i].intended_target_q == 99 ||
+            mydata->neighbors[i].intended_target_r == 99) {
+            continue;
+        }
+
+        if (mydata->neighbors[i].intended_target_q == mydata->intended_target_q &&
+            mydata->neighbors[i].intended_target_r == mydata->intended_target_r) {
+
+            if (mydata->neighbors[i].ID < kilo_uid) {
+                printf("当前机器人 %d 和邻居 %d 目标相同，放弃。\n",
+                       kilo_uid, mydata->neighbors[i].ID);
+
+                target_speed(0, 0);
+
+                mydata->intended_target_q = 99;
+                mydata->intended_target_r = 99;
+                mydata->has_movement_intent = 0;
+
+                set_bot_state(IDLE);
+                return;
+            }
+        }
+    }
+
+    int result = omni_move_to_lattice(&current_target);
+
+    global_localization();
+
+    if (!isfinite(mydata->x) || !isfinite(mydata->y)) {
+        printf("Robot %d localization failed: x=%f y=%f\n",
+               kilo_uid, mydata->x, mydata->y);
+
+        target_speed(0, 0);
+
+        mydata->intended_target_q = 99;
+        mydata->intended_target_r = 99;
+        mydata->has_movement_intent = 0;
+
+        set_bot_state(IDLE);
+        return;
+    }
+
+    struct Hex cur_hex = cart_to_hex((struct Cartesian){mydata->x, mydata->y});
+    mydata->hex_q = cur_hex.q;
+    mydata->hex_r = cur_hex.r;
+
+    if (result) {
+        finish_movement();
+        record_move(current_target);
+
+        mydata->original_position = cur_hex;
+
+        mydata->intended_target_q = 99;
+        mydata->intended_target_r = 99;
+        mydata->has_movement_intent = 0;
+
+        set_bot_state(IDLE);
+    }
+}
+#endif
+#endif
